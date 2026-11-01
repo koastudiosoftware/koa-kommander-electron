@@ -78,6 +78,17 @@
 @media(prefers-color-scheme:dark){:root[data-theme="system"] .panel-selection-size{color:#aeb8c2}}
 .context-menu button,.history-menu button,.drop-action-menu button{padding-left:10px;padding-right:10px}
 .context-menu kbd{padding:0;margin:0}
+.context-menu-item{position:relative}
+.context-menu .context-submenu-parent>button{justify-content:space-between}
+.context-submenu[hidden]{display:none}
+.context-submenu{position:absolute;z-index:1;top:-5px;left:calc(100% - 2px);width:180px;padding:5px;background:#fff;border:1px solid #dfe3e6;border-radius:6px;box-shadow:0 8px 28px #1e293533}
+.context-submenu-parent.opens-left .context-submenu{left:auto;right:calc(100% - 2px)}
+:root[data-theme="dark"] .context-menu,:root[data-theme="dark"] .context-menu button,:root[data-theme="dark"] .context-submenu{background:#20262d;border-color:#39414b;color:#d7dee5}
+:root[data-theme="dark"] .context-menu button:hover{background:#2a323b}
+@media(prefers-color-scheme:dark){
+  :root[data-theme="system"] .context-menu,:root[data-theme="system"] .context-menu button,:root[data-theme="system"] .context-submenu{background:#20262d;border-color:#39414b;color:#d7dee5}
+  :root[data-theme="system"] .context-menu button:hover{background:#2a323b}
+}
 
 /* Settings window */
 .settings-backdrop[hidden]{display:none}

@@ -620,6 +620,40 @@ ipcMain.handle('fs:create-shortcuts', async (_event, { sources, destination }) =
   return results;
 });
 
+ipcMain.handle('shell:new-shortcut-wizard', async (_event, directory) => {
+  if (process.platform !== 'win32') throw new Error('The Windows Shortcut wizard is only available on Windows.');
+  const targetDirectory = resolvePath(directory);
+  const directoryStats = await realFs.stat(targetDirectory);
+  if (!directoryStats.isDirectory()) throw new Error('The current location is not a folder.');
+
+  let shortcutPath;
+  for (let suffix = 1; ; suffix += 1) {
+    const name = suffix === 1 ? 'New Shortcut.lnk' : `New Shortcut (${suffix}).lnk`;
+    const candidate = path.join(targetDirectory, name);
+    try {
+      const placeholder = await fs.open(candidate, 'wx');
+      await placeholder.close();
+      shortcutPath = candidate;
+      break;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    execFile('rundll32.exe', ['appwiz.cpl,NewLinkHere', shortcutPath], { windowsHide: false }, async (error) => {
+      let created = false;
+      try {
+        const stats = await realFs.stat(shortcutPath);
+        created = stats.size > 0;
+        if (!created) await fs.rm(shortcutPath, { force: true });
+      } catch { /* The wizard may remove its placeholder when cancelled. */ }
+      if (error) reject(new Error(`Could not open the Windows Shortcut wizard: ${error.message}`));
+      else resolve({ created, path: created ? shortcutPath : null });
+    });
+  });
+});
+
 ipcMain.handle('fs:delete', async (event, { entries, confirm }) => {
   const count = entries.length;
   const confirmation = confirm ? await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {

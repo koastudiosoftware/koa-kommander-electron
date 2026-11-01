@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('fileManager', {
   diskSpace: (directory) => ipcRenderer.invoke('fs:disk-space', directory),
   transfer: (request) => ipcRenderer.invoke('fs:transfer', request),
   createShortcuts: (request) => ipcRenderer.invoke('fs:create-shortcuts', request),
+  createShortcutWizard: (directory) => ipcRenderer.invoke('shell:new-shortcut-wizard', directory),
   delete: (request) => ipcRenderer.invoke('fs:delete', request),
   open: (itemPath) => ipcRenderer.invoke('fs:open', itemPath),
   properties: (itemPath) => ipcRenderer.invoke('fs:properties', itemPath),

@@ -1213,6 +1213,15 @@ function bindPanel(side) {
     });
   });
   element.querySelector('.file-area')?.addEventListener('dragover', (event) => event.preventDefault());
+  element.querySelector('.file-area')?.addEventListener('contextmenu', (event) => {
+    if (event.target.closest('[data-entry]')) return;
+    event.preventDefault();
+    activeSide = side;
+    panels.left.element.classList.toggle('is-active', side === 'left');
+    panels.right.element.classList.toggle('is-active', side === 'right');
+    updateSummary();
+    showBackgroundContextMenu(event.clientX, event.clientY, side);
+  });
   element.querySelector('.file-area')?.addEventListener('drop', async (event) => {
     if (event.target.closest('[data-entry]')) return;
     event.preventDefault(); await handleDrop(event, side, panel.path);
@@ -1250,6 +1259,60 @@ function showContextMenu(x, y, side, entry) {
     actions[index][2]();
   }));
   document.addEventListener('mousedown', hideMenu, { once: true });
+}
+function showBackgroundContextMenu(x, y, side) {
+  menu.innerHTML = '<div class="context-menu-item context-submenu-parent"><button role="menuitem" data-open-new-submenu aria-haspopup="true" aria-expanded="false">New<span aria-hidden="true">›</span></button><div class="context-submenu" hidden><button role="menuitem" data-background-action="folder">Folder</button><button role="menuitem" data-background-action="shortcut">Shortcut</button></div></div><div class="menu-separator"></div><button role="menuitem" data-background-action="properties">Properties</button><button role="menuitem" data-background-action="explorer">Open in File Explorer</button>';
+  menu.hidden = false;
+  menu.style.left = `${Math.max(8, Math.min(x, innerWidth - 218))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, innerHeight - 150))}px`;
+  const submenuParent = menu.querySelector('.context-submenu-parent');
+  const submenuButton = menu.querySelector('[data-open-new-submenu]');
+  const submenu = menu.querySelector('.context-submenu');
+  const showSubmenu = () => {
+    submenu.hidden = false;
+    submenuButton.setAttribute('aria-expanded', 'true');
+    const rect = menu.getBoundingClientRect();
+    submenuParent.classList.toggle('opens-left', rect.right + 180 > innerWidth);
+  };
+  const hideSubmenu = () => {
+    submenu.hidden = true;
+    submenuButton.setAttribute('aria-expanded', 'false');
+  };
+  submenuParent.addEventListener('mouseenter', showSubmenu);
+  submenuParent.addEventListener('mouseleave', hideSubmenu);
+  submenuButton.addEventListener('focus', showSubmenu);
+  submenuButton.addEventListener('click', showSubmenu);
+  const dismissBackgroundMenu = (event) => {
+    if (menu.contains(event.target)) return;
+    menu.hidden = true;
+    document.removeEventListener('mousedown', dismissBackgroundMenu);
+  };
+  document.addEventListener('mousedown', dismissBackgroundMenu);
+  menu.querySelectorAll('[data-background-action]').forEach((button) => button.addEventListener('click', async () => {
+    const action = button.dataset.backgroundAction;
+    menu.hidden = true;
+    document.removeEventListener('mousedown', dismissBackgroundMenu);
+    if (action === 'folder') {
+      await createFolder(side);
+    } else if (action === 'shortcut') {
+      try {
+        const result = await window.fileManager.createShortcutWizard(panels[side].path);
+        await navigate(side, panels[side].path);
+        if (result.created) toast('Shortcut created');
+      } catch (error) {
+        toast(error.message);
+      }
+    } else if (action === 'properties') {
+      try {
+        showProperties(await window.fileManager.properties(panels[side].path));
+      } catch (error) {
+        toast(`Could not open Properties: ${error.message}`);
+      }
+    } else if (action === 'explorer') {
+      const result = await window.fileManager.openInFileManager(panels[side].path);
+      if (result?.error) toast(result.error);
+    }
+  }));
 }
 function hideMenu(event) { if (!menu.contains(event.target)) menu.hidden = true; }
 
