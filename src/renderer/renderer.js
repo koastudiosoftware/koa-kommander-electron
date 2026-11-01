@@ -1225,6 +1225,7 @@ function showContextMenu(x, y, side, entry) {
     ['Copy', 'Ctrl+C', () => copySelection(side, false)],
     ['Cut', 'Ctrl+X', () => copySelection(side, true)],
     ['Paste', 'Ctrl+V', () => pasteSelection()],
+    ['Rename', '', () => renameSelection(side)],
     ['Delete', 'Delete', () => deleteSelection(side)]
   ];
   if (entry.isDirectory) {
@@ -1237,7 +1238,7 @@ function showContextMenu(x, y, side, entry) {
       toast(`Could not open Properties: ${error.message}`);
     }
   }]);
-  const separators = new Set([1, 4, actions.length - 1]);
+  const separators = new Set([1, 5, actions.length - 1]);
   if (entry.isDirectory) separators.add(actions.length - 2);
   menu.innerHTML = actions.map(([label, shortcut], index) => `${separators.has(index) ? '<div class="menu-separator"></div>' : ''}<button role="menuitem" data-menu-index="${index}">${label}<kbd>${shortcut}</kbd></button>`).join('');
   menu.hidden = false;
