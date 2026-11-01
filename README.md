@@ -11,6 +11,8 @@ npm install
 npm start
 ```
 
+If you move or rename this checkout, remove the old taskbar pin, start the app with `npm start` from this folder, then pin the running Koa Kommander window again. The old pin keeps the previous checkout path.
+
 ## Versioning
 
 The About dialog displays `Major.Minor.Commit`: the major and minor numbers come from `package.json`, and the final number is the current Git commit count. Adjust the major and minor numbers in `package.json` manually when needed. Uncommitted changes do not affect the commit number; builds without Git metadata fall back to the `package.json` version.

@@ -6,7 +6,7 @@ const { watch } = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFile, execFileSync } = require('node:child_process');
-const windowsAppId = 'com.koastudio.koakommander';
+const windowsAppId = 'com.koastudio.koakommander.electron';
 if (process.platform === 'win32') app.setAppUserModelId(windowsAppId);
 app.setPath('userData', path.join(app.getPath('appData'), app.getName()));
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -210,7 +210,7 @@ function createWindow() {
     win.setAppDetails({
       appId: windowsAppId,
       appIconPath: path.join(__dirname, 'assets', 'koa-kommander-icon.ico'),
-      relaunchCommand: `"${process.execPath}" "${app.getAppPath()}"`,
+      relaunchCommand: `"${process.execPath}" "${path.resolve(__dirname, '..')}"`,
       relaunchDisplayName: 'Koa Kommander'
     });
   }
