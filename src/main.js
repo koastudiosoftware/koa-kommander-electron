@@ -189,29 +189,31 @@ ipcMain.handle('app:version-info', () => {
 
 function createWindow() {
   const windowState = readWindowState();
-  const windowIcon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'koa-kommander-icon.png'));
+  const windowIcon = nativeImage.createFromPath(
+    path.join(__dirname, "assets", "koa-kommander-icon.png"),
+  );
   const win = new BrowserWindow({
     width: windowState.width,
     height: windowState.height,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#f4f6f8',
+    backgroundColor: "#f4f6f8",
     icon: windowIcon,
-    title: 'Koa Kommander',
+    title: "Koa Kommander",
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
-    }
+      sandbox: true,
+    },
   });
-  if (process.platform === 'win32') {
+  if (process.platform === "win32") {
     win.setIcon(windowIcon);
     win.setAppDetails({
       appId: windowsAppId,
-      appIconPath: path.join(__dirname, 'assets', 'koa-kommander-icon.ico'),
-      relaunchCommand: `"${process.execPath}" "${path.resolve(__dirname, '..')}"`,
-      relaunchDisplayName: 'Koa Kommander'
+      appIconPath: path.join(__dirname, "assets", "koa-kommander-icon.ico"),
+      relaunchCommand: `"${process.execPath}" "${path.resolve(__dirname, "..")}"`,
+      relaunchDisplayName: "Koa Kommander",
     });
   }
 
@@ -220,18 +222,33 @@ function createWindow() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => saveWindowState(win), 250);
   };
-  win.on('resize', scheduleSave);
-  win.on('maximize', scheduleSave);
-  win.on('unmaximize', scheduleSave);
-  win.on('close', () => {
+  win.on("resize", scheduleSave);
+  win.on("maximize", scheduleSave);
+  win.on("unmaximize", scheduleSave);
+  win.on("close", () => {
     clearTimeout(saveTimer);
     saveWindowState(win);
   });
   if (windowState.maximized) win.maximize();
 
   Menu.setApplicationMenu(null);
-  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-  win.webContents.once('destroyed', () => closeWindowWatchers(win.webContents.id));
+  win.loadFile(path.join(__dirname, "renderer", "index.html"));
+  win.webContents.once("destroyed", () =>
+    closeWindowWatchers(win.webContents.id),
+  );
+
+  // Enable F12 and Ctrl+Shift+I to toggle DevTools
+  win.webContents.on("before-input-event", (event, input) => {
+    if (
+      input.type === "keyDown" &&
+      (input.key === "F12" ||
+        (input.control && input.shift && input.key.toLowerCase() === "i"))
+    ) {
+      win.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
+
   return win;
 }
 

@@ -1,61 +1,135 @@
+// ============================================================================
+// 1. STATE INITIALIZATION & LAYOUT RESTORATION
+// ============================================================================
 let savedLayout = {};
-try { savedLayout = JSON.parse(localStorage.getItem('koa-layout') || '{}') || {}; }
-catch { savedLayout = {}; }
+try {
+  savedLayout = JSON.parse(localStorage.getItem("koa-layout") || "{}") || {};
+} catch {
+  savedLayout = {};
+}
 function restoreColumns(columns) {
-  if (!Array.isArray(columns) || columns.length !== 3 || columns.some((width) => !Number.isFinite(width) || width <= 0)) return [58, 17, 25];
+  if (
+    !Array.isArray(columns) ||
+    columns.length !== 3 ||
+    columns.some((width) => !Number.isFinite(width) || width <= 0)
+  )
+    return [58, 17, 25];
   const total = columns.reduce((sum, width) => sum + width, 0);
-  return columns.map((width) => width / total * 100);
+  return columns.map((width) => (width / total) * 100);
 }
 function restoreView(view) {
-  return view === 'icons' ? 'icons' : 'details';
+  return view === "icons" ? "icons" : "details";
 }
 function restoreIconSize(size) {
   if (!Number.isFinite(size)) return 48;
   return Math.max(32, Math.min(160, 32 + Math.round((size - 32) / 8) * 8));
 }
 const panels = {
-  left: { element: document.querySelector('#panel-left'), path: null, entries: [], selected: new Set(), view: restoreView(savedLayout.left?.view), iconSize: restoreIconSize(savedLayout.left?.iconSize), columns: restoreColumns(savedLayout.left?.columns), sortBy: 'name', sortDirection: 'asc', history: [], historyIndex: -1, watchPath: null, searchId: null, searchRoot: null, thumbnailGeneration: 0 },
-  right: { element: document.querySelector('#panel-right'), path: null, entries: [], selected: new Set(), view: restoreView(savedLayout.right?.view), iconSize: restoreIconSize(savedLayout.right?.iconSize), columns: restoreColumns(savedLayout.right?.columns), sortBy: 'name', sortDirection: 'asc', history: [], historyIndex: -1, watchPath: null, searchId: null, searchRoot: null, thumbnailGeneration: 0 }
+  left: {
+    element: document.querySelector("#panel-left"),
+    path: null,
+    entries: [],
+    selected: new Set(),
+    view: restoreView(savedLayout.left?.view),
+    iconSize: restoreIconSize(savedLayout.left?.iconSize),
+    columns: restoreColumns(savedLayout.left?.columns),
+    sortBy: "name",
+    sortDirection: "asc",
+    history: [],
+    historyIndex: -1,
+    watchPath: null,
+    searchId: null,
+    searchRoot: null,
+    thumbnailGeneration: 0,
+  },
+  right: {
+    element: document.querySelector("#panel-right"),
+    path: null,
+    entries: [],
+    selected: new Set(),
+    view: restoreView(savedLayout.right?.view),
+    iconSize: restoreIconSize(savedLayout.right?.iconSize),
+    columns: restoreColumns(savedLayout.right?.columns),
+    sortBy: "name",
+    sortDirection: "asc",
+    history: [],
+    historyIndex: -1,
+    watchPath: null,
+    searchId: null,
+    searchRoot: null,
+    thumbnailGeneration: 0,
+  },
 };
 let layoutInitialized = false;
-let activeSide = 'left';
+let activeSide = "left";
 let clipboard = null;
 let toastTimer;
-const defaultPreferences = { showHidden: false, groupFolders: true, confirmDelete: true, dateFormat: 'us', timeFormat: '12h', theme: 'system', directorySets: [], directorySetSort: 'manual', thumbnailCachePath: '' };
+
+// ============================================================================
+// 2. PREFERENCES & CONFIGURATION STATE
+// ============================================================================
+const defaultPreferences = {
+  showHidden: false,
+  groupFolders: true,
+  confirmDelete: true,
+  dateFormat: "us",
+  timeFormat: "12h",
+  theme: "system",
+  directorySets: [],
+  directorySetSort: "manual",
+  thumbnailCachePath: "",
+};
 let preferences;
 let savedPreferences = {};
-try { savedPreferences = JSON.parse(localStorage.getItem('koa-settings') || '{}'); }
-catch { savedPreferences = {}; }
+try {
+  savedPreferences = JSON.parse(localStorage.getItem("koa-settings") || "{}");
+} catch {
+  savedPreferences = {};
+}
 preferences = { ...defaultPreferences, ...savedPreferences };
-if (typeof preferences.thumbnailCachePath !== 'string') preferences.thumbnailCachePath = '';
-if (!['manual', 'alphabetical'].includes(preferences.directorySetSort)) preferences.directorySetSort = 'manual';
-if (!Array.isArray(savedPreferences.directorySets)) preferences.directorySets = (savedPreferences.bookmarks || []).map((directory) => ({ type: 'single', path: directory, openIn: 'active', name: '' }));
+if (typeof preferences.thumbnailCachePath !== "string")
+  preferences.thumbnailCachePath = "";
+if (!["manual", "alphabetical"].includes(preferences.directorySetSort))
+  preferences.directorySetSort = "manual";
+if (!Array.isArray(savedPreferences.directorySets))
+  preferences.directorySets = (savedPreferences.bookmarks || []).map(
+    (directory) => ({
+      type: "single",
+      path: directory,
+      openIn: "active",
+      name: "",
+    }),
+  );
 delete preferences.bookmarks;
-const status = document.querySelector('#status-message');
-const summary = document.querySelector('#drive-space-summary');
-const menu = document.querySelector('#context-menu');
-const historyMenu = document.querySelector('#history-menu');
-const directorySetMenu = document.querySelector('#directory-set-menu');
+
+// ============================================================================
+// 3. UI ELEMENT REFERENCES & GLOBAL MODAL STATE
+// ============================================================================
+const status = document.querySelector("#status-message");
+const summary = document.querySelector("#drive-space-summary");
+const menu = document.querySelector("#context-menu");
+const historyMenu = document.querySelector("#history-menu");
+const directorySetMenu = document.querySelector("#directory-set-menu");
 let directorySetMenuSide = null;
 let detectedDrives = [];
-const driveContextMenu = document.querySelector('#drive-context-menu');
+const driveContextMenu = document.querySelector("#drive-context-menu");
 let driveContextSide = null;
 let driveContextRoot = null;
-const dropActionMenu = document.querySelector('#drop-action-menu');
-const conflictBackdrop = document.querySelector('#conflict-backdrop');
-const conflictItems = document.querySelector('#conflict-items');
-const conflictActions = document.querySelector('#conflict-actions');
-const conflictRename = document.querySelector('#conflict-rename');
-const conflictRenameInput = document.querySelector('#conflict-rename-name');
-const settingsBackdrop = document.querySelector('#settings-backdrop');
-const settingsContent = document.querySelector('#settings-content');
-const nameDialogBackdrop = document.querySelector('#name-dialog-backdrop');
-const nameDialogForm = document.querySelector('#name-dialog-form');
-const nameDialogInput = document.querySelector('#name-dialog-input');
-const aboutBackdrop = document.querySelector('#about-backdrop');
-const propertiesBackdrop = document.querySelector('#properties-backdrop');
-let settingsCategory = 'files';
-let defaultThumbnailCachePath = '';
+const dropActionMenu = document.querySelector("#drop-action-menu");
+const conflictBackdrop = document.querySelector("#conflict-backdrop");
+const conflictItems = document.querySelector("#conflict-items");
+const conflictActions = document.querySelector("#conflict-actions");
+const conflictRename = document.querySelector("#conflict-rename");
+const conflictRenameInput = document.querySelector("#conflict-rename-name");
+const settingsBackdrop = document.querySelector("#settings-backdrop");
+const settingsContent = document.querySelector("#settings-content");
+const nameDialogBackdrop = document.querySelector("#name-dialog-backdrop");
+const nameDialogForm = document.querySelector("#name-dialog-form");
+const nameDialogInput = document.querySelector("#name-dialog-input");
+const aboutBackdrop = document.querySelector("#about-backdrop");
+const propertiesBackdrop = document.querySelector("#properties-backdrop");
+let settingsCategory = "files";
+let defaultThumbnailCachePath = "";
 let directorySetDraft = null;
 let resolveConflictDecision = null;
 let resolveNameDialog = null;
@@ -66,141 +140,245 @@ let suppressRightContextUntil = 0;
 let diskSpaceTimer = null;
 let diskSpaceRequestId = 0;
 let displayedSpacePath = null;
+
+// ============================================================================
+// 4. STORAGE PERSISTENCE & THEME SYNC
+// ============================================================================
 function persistLayout() {
   if (!layoutInitialized) return;
   try {
-    localStorage.setItem('koa-layout', JSON.stringify({
-      panelRatio,
-      left: { path: panels.left.path, columns: panels.left.columns, view: panels.left.view, iconSize: panels.left.iconSize },
-      right: { path: panels.right.path, columns: panels.right.columns, view: panels.right.view, iconSize: panels.right.iconSize }
-    }));
-  } catch { /* Keep the file manager usable when storage is unavailable. */ }
+    localStorage.setItem(
+      "koa-layout",
+      JSON.stringify({
+        panelRatio,
+        left: {
+          path: panels.left.path,
+          columns: panels.left.columns,
+          view: panels.left.view,
+          iconSize: panels.left.iconSize,
+        },
+        right: {
+          path: panels.right.path,
+          columns: panels.right.columns,
+          view: panels.right.view,
+          iconSize: panels.right.iconSize,
+        },
+      }),
+    );
+  } catch {
+    /* Keep the file manager usable when storage is unavailable. */
+  }
 }
 function persistPanelViews() {
   try {
-    const layout = JSON.parse(localStorage.getItem('koa-layout') || '{}') || {};
-    for (const side of ['left', 'right']) {
-      layout[side] = { ...layout[side], view: panels[side].view, iconSize: panels[side].iconSize };
+    const layout = JSON.parse(localStorage.getItem("koa-layout") || "{}") || {};
+    for (const side of ["left", "right"]) {
+      layout[side] = {
+        ...layout[side],
+        view: panels[side].view,
+        iconSize: panels[side].iconSize,
+      };
     }
-    localStorage.setItem('koa-layout', JSON.stringify(layout));
-  } catch { /* Keep the file manager usable when storage is unavailable. */ }
+    localStorage.setItem("koa-layout", JSON.stringify(layout));
+  } catch {
+    /* Keep the file manager usable when storage is unavailable. */
+  }
 }
 
 function savePreferences() {
-  localStorage.setItem('koa-settings', JSON.stringify(preferences));
+  localStorage.setItem("koa-settings", JSON.stringify(preferences));
   document.documentElement.dataset.theme = preferences.theme;
 }
-window.addEventListener('storage', (event) => {
-  if (event.key !== 'koa-settings') return;
+window.addEventListener("storage", (event) => {
+  if (event.key !== "koa-settings") return;
   try {
     savedPreferences = event.newValue ? JSON.parse(event.newValue) : {};
     preferences = { ...defaultPreferences, ...savedPreferences };
-    if (typeof preferences.thumbnailCachePath !== 'string') preferences.thumbnailCachePath = '';
-    if (!['manual', 'alphabetical'].includes(preferences.directorySetSort)) preferences.directorySetSort = 'manual';
+    if (typeof preferences.thumbnailCachePath !== "string")
+      preferences.thumbnailCachePath = "";
+    if (!["manual", "alphabetical"].includes(preferences.directorySetSort))
+      preferences.directorySetSort = "manual";
     if (!Array.isArray(savedPreferences.directorySets)) {
-      preferences.directorySets = (savedPreferences.bookmarks || []).map((directory) => ({ type: 'single', path: directory, openIn: 'active', name: '' }));
+      preferences.directorySets = (savedPreferences.bookmarks || []).map(
+        (directory) => ({
+          type: "single",
+          path: directory,
+          openIn: "active",
+          name: "",
+        }),
+      );
     }
     delete preferences.bookmarks;
     document.documentElement.dataset.theme = preferences.theme;
     if (layoutInitialized) {
-      renderPanel('left');
-      renderPanel('right');
+      renderPanel("left");
+      renderPanel("right");
     }
-    if (!settingsBackdrop.hidden && !directorySetDraft) renderSettingsCategory();
-  } catch { /* Keep the current window usable if another instance writes malformed settings. */ }
+    if (!settingsBackdrop.hidden && !directorySetDraft)
+      renderSettingsCategory();
+  } catch {
+    /* Keep the current window usable if another instance writes malformed settings. */
+  }
 });
 savePreferences();
 
+// ============================================================================
+// 5. FORMATTERS, ICONS & UTILITIES
+// ============================================================================
 const icon = (name) => {
   const paths = {
-    folder: '<path d="M2.5 6.5h5l2 2h10v9.8a1.2 1.2 0 0 1-1.2 1.2H3.7a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M2.5 8.5h17"/>',
-    file: '<path d="M5 2.5h8l5 5v13H5a1.5 1.5 0 0 1-1.5-1.5V4A1.5 1.5 0 0 1 5 2.5Z"/><path d="M13 2.8v5h4.7M7 12h7M7 15h7"/>',
-    image: '<rect x="3" y="3.5" width="18" height="17" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m4 18 5-5 3 3 3-4 5 6"/>',
-    pdf: '<path d="M5 2.5h8l5 5v13H5a1.5 1.5 0 0 1-1.5-1.5V4A1.5 1.5 0 0 1 5 2.5Z"/><path d="M13 2.8v5h4.7M7 13h8M7 16h6"/>',
-    code: '<path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/>',
-    archive: '<path d="M3 4h18v4H3zM5 8v12h14V8M10 12h4"/>'
+    folder:
+      '<img class="svg-icon" src="../assets/material-icons_folder.svg" alt="" aria-hidden="true" draggable="false">',
+    file: '<img class="svg-icon" src="../assets/material-icons_insert_drive_file.svg" alt="" aria-hidden="true" draggable="false">',
+    image:
+      '<img class="svg-icon" src="../assets/material-icons_image.svg" alt="" aria-hidden="true" draggable="false">',
   };
-  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.file}</svg>`;
+  return `${paths[name] || paths.file}`;
 };
 
-const imageExtensions = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'heic']);
+const imageExtensions = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "bmp",
+  "svg",
+  "heic",
+]);
 function isImageEntry(entry) {
-  return !entry.isDirectory && imageExtensions.has(entry.name.split('.').pop().toLowerCase());
+  return (
+    !entry.isDirectory &&
+    imageExtensions.has(entry.name.split(".").pop().toLowerCase())
+  );
 }
 function kind(entry) {
-  if (entry.isDirectory) return 'folder';
-  const ext = entry.name.split('.').pop().toLowerCase();
-  if (imageExtensions.has(ext)) return 'image';
-  if (ext === 'pdf') return 'pdf';
-  if (['js','ts','json','html','css','py','md','yaml','yml','sh','bat'].includes(ext)) return 'code';
-  if (['zip','7z','rar','tar','gz'].includes(ext)) return 'archive';
-  return 'file';
+  if (entry.isDirectory) return "folder";
+  const ext = entry.name.split(".").pop().toLowerCase();
+  if (imageExtensions.has(ext)) return "image";
+  if (ext === "pdf") return "pdf";
+  if (
+    [
+      "js",
+      "ts",
+      "json",
+      "html",
+      "css",
+      "py",
+      "md",
+      "yaml",
+      "yml",
+      "sh",
+      "bat",
+    ].includes(ext)
+  )
+    return "code";
+  if (["zip", "7z", "rar", "tar", "gz"].includes(ext)) return "archive";
+  return "file";
 }
 function formatSize(size, directory) {
-  if (directory) return '—';
-  if (!size) return '0 B';
-  const units = ['B','KB','MB','GB','TB'];
-  const n = Math.min(Math.floor(Math.log(size) / Math.log(1024)), units.length - 1);
+  if (directory) return "—";
+  if (!size) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const n = Math.min(
+    Math.floor(Math.log(size) / Math.log(1024)),
+    units.length - 1,
+  );
   return `${(size / 1024 ** n).toFixed(n === 0 ? 0 : 1)} ${units[n]}`;
 }
 function formatDate(iso) {
-  if (!iso) return '—';
+  if (!iso) return "—";
   const date = new Date(iso);
   const year = String(date.getFullYear());
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const dateText = {
-    us: `${month}/${day}/${year}`,
-    eu: `${day}/${month}/${year}`,
-    'iso-dash': `${year}-${month}-${day}`,
-    'iso-slash': `${year}/${month}/${day}`
-  }[preferences.dateFormat] || `${month}/${day}/${year}`;
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const dateText =
+    {
+      us: `${month}/${day}/${year}`,
+      eu: `${day}/${month}/${year}`,
+      "iso-dash": `${year}-${month}-${day}`,
+      "iso-slash": `${year}/${month}/${day}`,
+    }[preferences.dateFormat] || `${month}/${day}/${year}`;
   const hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, "0");
   let timeText;
-  if (preferences.timeFormat === '24h') timeText = `${hours}:${minutes}`;
-  else if (preferences.timeFormat === '24h-padded') timeText = `${String(hours).padStart(2, '0')}:${minutes}`;
-  else timeText = `${hours % 12 || 12}:${minutes} ${hours >= 12 ? 'PM' : 'AM'}`;
+  if (preferences.timeFormat === "24h") timeText = `${hours}:${minutes}`;
+  else if (preferences.timeFormat === "24h-padded")
+    timeText = `${String(hours).padStart(2, "0")}:${minutes}`;
+  else timeText = `${hours % 12 || 12}:${minutes} ${hours >= 12 ? "PM" : "AM"}`;
   return `${dateText} ${timeText}`;
 }
 function escapeHtml(text) {
-  return String(text).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
+  return String(text).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
 }
 function pathParts(fullPath) {
-  const parsedRoot = fullPath.match(/^(?:[A-Za-z]:\\|\\\\[^\\]+\\[^\\]+|\/)/)?.[0] || '';
+  const parsedRoot =
+    fullPath.match(/^(?:[A-Za-z]:\\|\\\\[^\\]+\\[^\\]+|\/)/)?.[0] || "";
   const rest = fullPath.slice(parsedRoot.length).split(/[\\/]/).filter(Boolean);
   let current = parsedRoot;
-  const result = [{ label: parsedRoot || fullPath, path: parsedRoot || fullPath }];
+  const result = [
+    { label: parsedRoot || fullPath, path: parsedRoot || fullPath },
+  ];
   for (const part of rest) {
-    current = current ? `${current.replace(/[\\/]$/, '')}${fullPath.includes('\\') ? '\\' : '/'}${part}` : part;
+    current = current
+      ? `${current.replace(/[\\/]$/, "")}${fullPath.includes("\\") ? "\\" : "/"}${part}`
+      : part;
     result.push({ label: part, path: current });
   }
   return result;
 }
-function setStatus(message) { status.textContent = message; }
-function toast(message) {
-  const el = document.querySelector('#toast');
-  el.textContent = message;
-  el.classList.add('visible');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('visible'), 2400);
+function setStatus(message) {
+  status.textContent = message;
 }
+function toast(message) {
+  const el = document.querySelector("#toast");
+  el.textContent = message;
+  el.classList.add("visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("visible"), 2400);
+}
+
+// ============================================================================
+// 6. PROPERTIES & FOLDER SIZE SCANNING
+// ============================================================================
 function showProperties(properties) {
   cancelFolderSizeScan();
   const rows = [
-    ['Type', properties.type],
-    ['Location', properties.location],
-    ['Size', properties.isDirectory ? 'Calculating…' : formatSize(properties.size, false)],
-    ...(properties.isDirectory ? [['Files', 'Counting…'], ['Folders', 'Counting…']] : []),
-    ['Created', formatDate(properties.created)],
-    ['Modified', formatDate(properties.modified)],
-    ['Accessed', formatDate(properties.accessed)]
+    ["Type", properties.type],
+    ["Location", properties.location],
+    [
+      "Size",
+      properties.isDirectory
+        ? "Calculating…"
+        : formatSize(properties.size, false),
+    ],
+    ...(properties.isDirectory
+      ? [
+          ["Files", "Counting…"],
+          ["Folders", "Counting…"],
+        ]
+      : []),
+    ["Created", formatDate(properties.created)],
+    ["Modified", formatDate(properties.modified)],
+    ["Accessed", formatDate(properties.accessed)],
   ];
-  document.querySelector('#properties-title').textContent = `${properties.name} Properties`;
-  const rowIds = { Size: 'properties-size', Files: 'properties-file-count', Folders: 'properties-folder-count' };
-  document.querySelector('#properties-content').innerHTML = `<div class="properties-name">${escapeHtml(properties.name)}</div><dl class="properties-list">${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd ${rowIds[label] ? `id="${rowIds[label]}"` : ''} title="${escapeHtml(value)}">${escapeHtml(value)}</dd></div>`).join('')}</dl><div class="properties-scan-footer" ${properties.isDirectory ? '' : 'hidden'}><span id="properties-scan-status">Preparing folder scan…</span><button class="settings-secondary" id="properties-cancel-scan" type="button">Cancel calculation</button></div>`;
+  document.querySelector("#properties-title").textContent =
+    `${properties.name} Properties`;
+  const rowIds = {
+    Size: "properties-size",
+    Files: "properties-file-count",
+    Folders: "properties-folder-count",
+  };
+  document.querySelector("#properties-content").innerHTML =
+    `<div class="properties-name">${escapeHtml(properties.name)}</div><dl class="properties-list">${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd ${rowIds[label] ? `id="${rowIds[label]}"` : ""} title="${escapeHtml(value)}">${escapeHtml(value)}</dd></div>`).join("")}</dl><div class="properties-scan-footer" ${properties.isDirectory ? "" : "hidden"}><span id="properties-scan-status">Preparing folder scan…</span><button class="settings-secondary" id="properties-cancel-scan" type="button">Cancel calculation</button></div>`;
   propertiesBackdrop.hidden = false;
-  document.querySelector('#properties-close').focus();
+  document.querySelector("#properties-close").focus();
   if (properties.isDirectory) startFolderSizeScan(properties.path);
 }
 function cancelFolderSizeScan() {
@@ -213,32 +391,46 @@ function closeProperties() {
   propertiesBackdrop.hidden = true;
 }
 async function startFolderSizeScan(itemPath) {
-  const requestId = globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const requestId =
+    globalThis.crypto?.randomUUID?.() ||
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   activeFolderSizeRequest = requestId;
-  const size = document.querySelector('#properties-size');
-  const scanStatus = document.querySelector('#properties-scan-status');
-  const cancelButton = document.querySelector('#properties-cancel-scan');
-  const setStatus = (text) => { if (scanStatus) scanStatus.textContent = text; };
+  const size = document.querySelector("#properties-size");
+  const scanStatus = document.querySelector("#properties-scan-status");
+  const cancelButton = document.querySelector("#properties-cancel-scan");
+  const setStatus = (text) => {
+    if (scanStatus) scanStatus.textContent = text;
+  };
   try {
     const result = await window.fileManager.folderSize({ requestId, itemPath });
     if (activeFolderSizeRequest !== requestId) return;
     if (result.cancelled) {
-      size.textContent = 'Cancelled';
-      document.querySelector('#properties-file-count').textContent = 'Cancelled';
-      document.querySelector('#properties-folder-count').textContent = 'Cancelled';
-      setStatus('Folder size calculation cancelled.');
+      size.textContent = "Cancelled";
+      document.querySelector("#properties-file-count").textContent =
+        "Cancelled";
+      document.querySelector("#properties-folder-count").textContent =
+        "Cancelled";
+      setStatus("Folder size calculation cancelled.");
     } else {
       size.textContent = formatSize(result.totalBytes, false);
-      document.querySelector('#properties-file-count').textContent = String(result.fileCount);
-      document.querySelector('#properties-folder-count').textContent = String(result.folderCount);
-      setStatus(`Scanned ${result.fileCount} files and ${result.folderCount} folders.`);
+      document.querySelector("#properties-file-count").textContent = String(
+        result.fileCount,
+      );
+      document.querySelector("#properties-folder-count").textContent = String(
+        result.folderCount,
+      );
+      setStatus(
+        `Scanned ${result.fileCount} files and ${result.folderCount} folders.`,
+      );
     }
     cancelButton.hidden = true;
   } catch (error) {
     if (activeFolderSizeRequest !== requestId) return;
-    size.textContent = 'Unavailable';
-    document.querySelector('#properties-file-count').textContent = 'Unavailable';
-    document.querySelector('#properties-folder-count').textContent = 'Unavailable';
+    size.textContent = "Unavailable";
+    document.querySelector("#properties-file-count").textContent =
+      "Unavailable";
+    document.querySelector("#properties-folder-count").textContent =
+      "Unavailable";
     setStatus(`Could not calculate folder size: ${error.message}`);
     cancelButton.hidden = true;
   } finally {
@@ -246,25 +438,43 @@ async function startFolderSizeScan(itemPath) {
   }
 }
 window.fileManager.onFolderSizeProgress((progress) => {
-  if (progress.requestId !== activeFolderSizeRequest || propertiesBackdrop.hidden) return;
-  document.querySelector('#properties-size').textContent = `${formatSize(progress.totalBytes, false)} so far`;
-  document.querySelector('#properties-file-count').textContent = String(progress.fileCount);
-  document.querySelector('#properties-folder-count').textContent = String(progress.folderCount);
-  document.querySelector('#properties-scan-status').textContent = 'Calculating folder size and contents…';
+  if (
+    progress.requestId !== activeFolderSizeRequest ||
+    propertiesBackdrop.hidden
+  )
+    return;
+  document.querySelector("#properties-size").textContent =
+    `${formatSize(progress.totalBytes, false)} so far`;
+  document.querySelector("#properties-file-count").textContent = String(
+    progress.fileCount,
+  );
+  document.querySelector("#properties-folder-count").textContent = String(
+    progress.folderCount,
+  );
+  document.querySelector("#properties-scan-status").textContent =
+    "Calculating folder size and contents…";
 });
+
+// ============================================================================
+// 7. DIALOG DRAG & DROP UTILITIES
+// ============================================================================
 function makeDialogDraggable(dialogSelector, handleSelector) {
   const dialog = document.querySelector(dialogSelector);
   const handle = dialog?.querySelector(handleSelector);
   if (!dialog || !handle) return;
-  handle.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0 || event.target.closest('button,input,select,textarea,a')) return;
+  handle.addEventListener("pointerdown", (event) => {
+    if (
+      event.button !== 0 ||
+      event.target.closest("button,input,select,textarea,a")
+    )
+      return;
     event.preventDefault();
     const rect = dialog.getBoundingClientRect();
-    dialog.style.position = 'fixed';
+    dialog.style.position = "fixed";
     dialog.style.left = `${rect.left}px`;
     dialog.style.top = `${rect.top}px`;
-    dialog.style.margin = '0';
-    dialog.style.transform = 'none';
+    dialog.style.margin = "0";
+    dialog.style.transform = "none";
     const startX = event.clientX;
     const startY = event.clientY;
     const startLeft = rect.left;
@@ -277,34 +487,41 @@ function makeDialogDraggable(dialogSelector, handleSelector) {
       dialog.style.top = `${Math.min(maxTop, Math.max(8, startTop + moveEvent.clientY - startY))}px`;
     };
     const finish = () => {
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', finish);
-      handle.removeEventListener('pointercancel', finish);
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", finish);
+      handle.removeEventListener("pointercancel", finish);
     };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', finish, { once: true });
-    handle.addEventListener('pointercancel', finish, { once: true });
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", finish, { once: true });
+    handle.addEventListener("pointercancel", finish, { once: true });
   });
 }
 [
-  ['.settings-dialog', '.settings-header'],
-  ['.conflict-dialog', '.conflict-header'],
-  ['.name-dialog', 'h2'],
-  ['.about-dialog', 'h2'],
-  ['.properties-dialog', '.properties-header']
-].forEach(([dialogSelector, handleSelector]) => makeDialogDraggable(dialogSelector, handleSelector));
+  [".settings-dialog", ".settings-header"],
+  [".conflict-dialog", ".conflict-header"],
+  [".name-dialog", "h2"],
+  [".about-dialog", "h2"],
+  [".properties-dialog", ".properties-header"],
+].forEach(([dialogSelector, handleSelector]) =>
+  makeDialogDraggable(dialogSelector, handleSelector),
+);
 
+// ============================================================================
+// 8. CONFLICT RESOLUTION & TRANSFER DIALOGS
+// ============================================================================
 function suggestedCopyName(name) {
-  const extensionAt = name.lastIndexOf('.');
+  const extensionAt = name.lastIndexOf(".");
   const hasExtension = extensionAt > 0;
   const stem = hasExtension ? name.slice(0, extensionAt) : name;
-  const extension = hasExtension ? name.slice(extensionAt) : '';
+  const extension = hasExtension ? name.slice(extensionAt) : "";
   return `${stem} (1)${extension}`;
 }
 function conflictObjectCard(label, item, choice, actionLabel, primary = false) {
-  const tag = choice ? 'button' : 'article';
-  const attributes = choice ? `type="button" data-conflict-choice="${choice}"` : '';
-  return `<${tag} class="conflict-object-choice ${primary ? 'primary' : ''}" ${attributes}><div class="conflict-object-heading">${label}</div><div class="conflict-object-name"><span class="file-icon ${kind(item)}">${icon(kind(item))}</span><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong></div><dl><div><dt>Type</dt><dd>${item.isDirectory ? 'Folder' : 'File'}</dd></div><div><dt>Size</dt><dd>${formatSize(item.size, item.isDirectory)}</dd></div><div><dt>Modified</dt><dd>${formatDate(item.modified)}</dd></div></dl><div class="conflict-object-path" title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</div><div class="conflict-object-action">${actionLabel || 'Choose Rename below for this item type'}</div></${tag}>`;
+  const tag = choice ? "button" : "article";
+  const attributes = choice
+    ? `type="button" data-conflict-choice="${choice}"`
+    : "";
+  return `<${tag} class="conflict-object-choice ${primary ? "primary" : ""}" ${attributes}><div class="conflict-object-heading">${label}</div><div class="conflict-object-name"><span class="file-icon ${kind(item)}">${icon(kind(item))}</span><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong></div><dl><div><dt>Type</dt><dd>${item.isDirectory ? "Folder" : "File"}</dd></div><div><dt>Size</dt><dd>${formatSize(item.size, item.isDirectory)}</dd></div><div><dt>Modified</dt><dd>${formatDate(item.modified)}</dd></div></dl><div class="conflict-object-path" title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</div><div class="conflict-object-action">${actionLabel || "Choose Rename below for this item type"}</div></${tag}>`;
 }
 function askTransferConflict(conflict) {
   return new Promise((resolve) => {
@@ -313,15 +530,26 @@ function askTransferConflict(conflict) {
     const existing = conflict.targetInfo;
     const bothFiles = !incoming.isDirectory && !existing.isDirectory;
     const bothFolders = incoming.isDirectory && existing.isDirectory;
-    const newChoice = bothFiles ? 'overwrite' : bothFolders ? 'merge' : null;
-    const newAction = bothFiles ? 'Overwrite the existing file' : bothFolders ? 'Merge folders · matching files are replaced' : null;
-    conflictItems.innerHTML = `${conflictObjectCard('New item', incoming, newChoice, newAction, Boolean(newChoice))}${conflictObjectCard('Old item', existing, 'skip', 'Keep the existing item')}`;
-    conflictActions.innerHTML = '<button class="conflict-choice" data-conflict-choice="rename">Rename incoming item</button><button class="conflict-choice cancel" data-conflict-choice="cancel">Cancel operation</button>';
+    const newChoice = bothFiles ? "overwrite" : bothFolders ? "merge" : null;
+    const newAction = bothFiles
+      ? "Overwrite the existing file"
+      : bothFolders
+        ? "Merge folders · matching files are replaced"
+        : null;
+    conflictItems.innerHTML = `${conflictObjectCard("New item", incoming, newChoice, newAction, Boolean(newChoice))}${conflictObjectCard("Old item", existing, "skip", "Keep the existing item")}`;
+    conflictActions.innerHTML =
+      '<button class="conflict-choice" data-conflict-choice="rename">Rename incoming item</button><button class="conflict-choice cancel" data-conflict-choice="cancel">Cancel operation</button>';
     conflictRename.hidden = true;
-    const candidate = suggestedCopyName(pathParts(conflict.target).at(-1)?.label || incoming.name);
+    const candidate = suggestedCopyName(
+      pathParts(conflict.target).at(-1)?.label || incoming.name,
+    );
     conflictRenameInput.value = candidate;
     conflictBackdrop.hidden = false;
-    (conflictItems.querySelector('.primary') || conflictItems.querySelector('[data-conflict-choice]') || conflictActions.querySelector('[data-conflict-choice="rename"]'))?.focus();
+    (
+      conflictItems.querySelector(".primary") ||
+      conflictItems.querySelector("[data-conflict-choice]") ||
+      conflictActions.querySelector('[data-conflict-choice="rename"]')
+    )?.focus();
   });
 }
 function finishConflictDecision(decision) {
@@ -331,14 +559,16 @@ function finishConflictDecision(decision) {
   conflictBackdrop.hidden = true;
   resolve(decision);
 }
-conflictItems.addEventListener('click', (event) => {
-  const choice = event.target.closest('[data-conflict-choice]')?.dataset.conflictChoice;
+conflictItems.addEventListener("click", (event) => {
+  const choice = event.target.closest("[data-conflict-choice]")?.dataset
+    .conflictChoice;
   if (choice) finishConflictDecision({ choice });
 });
-conflictActions.addEventListener('click', (event) => {
-  const choice = event.target.closest('[data-conflict-choice]')?.dataset.conflictChoice;
+conflictActions.addEventListener("click", (event) => {
+  const choice = event.target.closest("[data-conflict-choice]")?.dataset
+    .conflictChoice;
   if (!choice) return;
-  if (choice === 'rename') {
+  if (choice === "rename") {
     conflictRename.hidden = false;
     conflictRenameInput.focus();
     conflictRenameInput.select();
@@ -346,26 +576,38 @@ conflictActions.addEventListener('click', (event) => {
   }
   finishConflictDecision({ choice });
 });
-document.querySelector('[data-conflict-confirm-rename]').addEventListener('click', () => {
-  const name = conflictRenameInput.value.trim();
-  if (!name || name === '.' || name === '..' || /[\\/]/.test(name)) { toast('Enter a valid file name'); return; }
-  finishConflictDecision({ choice: 'rename', name });
-});
-conflictRenameInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') {
+document
+  .querySelector("[data-conflict-confirm-rename]")
+  .addEventListener("click", () => {
+    const name = conflictRenameInput.value.trim();
+    if (!name || name === "." || name === ".." || /[\\/]/.test(name)) {
+      toast("Enter a valid file name");
+      return;
+    }
+    finishConflictDecision({ choice: "rename", name });
+  });
+conflictRenameInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
     event.preventDefault();
     event.stopPropagation();
-    document.querySelector('[data-conflict-confirm-rename]').click();
+    document.querySelector("[data-conflict-confirm-rename]").click();
   }
 });
 
-async function navigate(side, directory, { historyMode = 'push', historyIndex = -1 } = {}) {
+// ============================================================================
+// 9. NAVIGATION & PANEL CORE LOGIC
+// ============================================================================
+async function navigate(
+  side,
+  directory,
+  { historyMode = "push", historyIndex = -1 } = {},
+) {
   const panel = panels[side];
   panel.thumbnailGeneration += 1;
   if (panel.searchId) window.fileManager.cancelSearch(panel.searchId);
   panel.searchId = null;
   panel.searchRoot = null;
-  setStatus('Loading folder…');
+  setStatus("Loading folder…");
   try {
     const result = await window.fileManager.list(directory);
     panel.path = result.path;
@@ -373,28 +615,35 @@ async function navigate(side, directory, { historyMode = 'push', historyIndex = 
     if (panel.watchPath !== result.path) {
       const watchedPath = result.path;
       panel.watchPath = watchedPath;
-      window.fileManager.watchDirectory(side, watchedPath).then((watchResult) => {
-        if (!watchResult.ok && panel.watchPath === watchedPath) panel.watchPath = null;
-      }).catch(() => { if (panel.watchPath === watchedPath) panel.watchPath = null; });
+      window.fileManager
+        .watchDirectory(side, watchedPath)
+        .then((watchResult) => {
+          if (!watchResult.ok && panel.watchPath === watchedPath)
+            panel.watchPath = null;
+        })
+        .catch(() => {
+          if (panel.watchPath === watchedPath) panel.watchPath = null;
+        });
     }
-    if (historyMode === 'move') panel.historyIndex = historyIndex;
-    else if (historyMode === 'push' && panel.history.at(-1) !== result.path) {
+    if (historyMode === "move") panel.historyIndex = historyIndex;
+    else if (historyMode === "push" && panel.history.at(-1) !== result.path) {
       panel.history = panel.history.slice(0, panel.historyIndex + 1);
       panel.history.push(result.path);
       panel.historyIndex = panel.history.length - 1;
-    } else if (historyMode === 'push' && panel.historyIndex < 0) {
+    } else if (historyMode === "push" && panel.historyIndex < 0) {
       panel.history = [result.path];
       panel.historyIndex = 0;
     }
     panel.selected.clear();
     renderPanel(side);
     persistLayout();
-    setStatus('Ready');
+    setStatus("Ready");
     return true;
   } catch (error) {
-    if (panel.view === 'icons') loadThumbnailImages(side, panel.thumbnailGeneration);
+    if (panel.view === "icons")
+      loadThumbnailImages(side, panel.thumbnailGeneration);
     toast(`Could not open folder: ${error.message}`);
-    setStatus('Could not load folder');
+    setStatus("Could not load folder");
     return false;
   }
 }
@@ -402,88 +651,123 @@ async function navigate(side, directory, { historyMode = 'push', historyIndex = 
 function panelChrome(side) {
   const panel = panels[side];
   const parts = panel.path ? pathParts(panel.path) : [];
-  const crumbs = parts.map((part, index) => {
-    const label = index === 0 && /^[A-Za-z]:\\$/.test(part.label) ? part.label.slice(0, 2) : part.label;
-    return `<span class="crumb" data-crumb="${index}">${escapeHtml(label)}</span>${index < parts.length - 1 ? '<span class="crumb-sep">›</span>' : ''}`;
-  }).join('');
+  const crumbs = parts
+    .map((part, index) => {
+      const label =
+        index === 0 && /^[A-Za-z]:\\$/.test(part.label)
+          ? part.label.slice(0, 2)
+          : part.label;
+      return `<span class="crumb" data-crumb="${index}">${escapeHtml(label)}</span>${index < parts.length - 1 ? '<span class="crumb-sep">›</span>' : ""}`;
+    })
+    .join("");
   return `<div class="panel-top">
     <div class="pathbar"><button class="path-home" data-action="home" title="Go to Home folder" aria-label="Go to Home folder">⌂</button>${crumbs}</div>
   </div>
-  <div class="toolbar"><button class="toolbar-button icon-only" data-action="up" aria-label="Go up one folder" title="Go up one folder">${actionIcon('up')}</button><button class="toolbar-button icon-only" data-action="refresh" aria-label="Refresh" title="Refresh">${actionIcon('refresh')}</button><span class="toolbar-divider" aria-hidden="true"></span><span class="drive-button-group" data-drive-buttons>${renderDriveButtons(side)}</span><span class="toolbar-spacer"></span>
-    <div class="view-group" role="group" aria-label="Panel view"><button class="view-button ${panel.view === 'details' ? 'active' : ''}" data-view="details" title="Details" aria-label="Details view" aria-pressed="${panel.view === 'details'}">${gridIcon('details')}</button><button class="view-button ${panel.view === 'icons' ? 'active' : ''}" data-view="icons" title="Thumbnails" aria-label="Thumbnail view" aria-pressed="${panel.view === 'icons'}">${gridIcon('icons')}</button></div>
-    <button class="toolbar-button directory-set-trigger" data-action="directory-sets" aria-label="Open a saved directory set" aria-expanded="false" title="Directory sets">${actionIcon('sets')}<span>Sets</span></button>
-    <button class="toolbar-button icon-only" data-action="match-other" aria-label="${side === 'left' ? 'Match right panel folder' : 'Match left panel folder'}" title="${side === 'left' ? 'Go to right panel folder' : 'Go to left panel folder'}">${actionIcon(side === 'left' ? 'left' : 'right')}</button>
-    ${panel.view === 'icons' ? `<label class="size-control" title="Thumbnail size"><span data-size-value>${panel.iconSize}</span><input type="range" min="32" max="160" step="8" value="${panel.iconSize}" data-action="icon-size" aria-label="Thumbnail size"></label>` : ''}
+  <div class="toolbar">
+    <button class="toolbar-button icon-only" data-action="up" aria-label="Go up one folder" title="Go up one folder">${actionIcon("up")}</button>
+    <button class="toolbar-button icon-only" data-action="refresh" aria-label="Refresh" title="Refresh">${actionIcon("refresh")}</button>
+    <span class="toolbar-divider" aria-hidden="true"></span>
+    <span class="drive-button-group" data-drive-buttons>${renderDriveButtons(side)}</span>
+    <span class="toolbar-spacer"></span>
+    ${panel.view === "icons" ? `<label class="size-control" title="Thumbnail size"><span data-size-value>${panel.iconSize}</span><input type="range" min="32" max="160" step="8" value="${panel.iconSize}" data-action="icon-size" aria-label="Thumbnail size"></label>` : ""}
+    <div class="view-group" role="group" aria-label="Panel view">
+      <button class="view-button ${panel.view === "details" ? "active" : ""}" data-view="details" title="Details" aria-label="Details view" aria-pressed="${panel.view === "details"}">${gridIcon("details")}</button>
+      <button class="view-button ${panel.view === "icons" ? "active" : ""}" data-view="icons" title="Thumbnails" aria-label="Thumbnail view" aria-pressed="${panel.view === "icons"}">${gridIcon("icons")}</button>
+    </div>
+    <button class="toolbar-button directory-set-trigger" data-action="directory-sets" aria-label="Open a saved directory set" aria-expanded="false" title="Directory sets">${actionIcon("sets")}<span>Sets</span></button>
+    <button class="toolbar-button icon-only" data-action="match-other" aria-label="${side === "left" ? "Match right panel folder" : "Match left panel folder"}" title="${side === "left" ? "Go to right panel folder" : "Go to left panel folder"}">${actionIcon(side === "left" ? "left" : "right")}</button>
   </div>`;
 }
 function renderDriveButtons(side) {
-  return detectedDrives.map((drive) => {
-    const isCurrent = panels[side].path?.toLowerCase().startsWith(drive.path.toLowerCase());
-    const title = `${drive.name}${drive.label ? ` — ${drive.label}` : ''}${drive.canEject ? ' (Removable)' : ''}`;
-    return `<button class="toolbar-button drive-button ${isCurrent ? 'active' : ''}" data-drive-button="${escapeHtml(drive.path)}" aria-label="Open ${escapeHtml(drive.name)}${drive.label ? `, ${escapeHtml(drive.label)}` : ''}" aria-pressed="${Boolean(isCurrent)}" title="${escapeHtml(title)}">${escapeHtml(drive.name)}</button>`;
-  }).join('');
+  return detectedDrives
+    .map((drive) => {
+      const isCurrent = panels[side].path
+        ?.toLowerCase()
+        .startsWith(drive.path.toLowerCase());
+      const title = `${drive.name}${drive.label ? ` — ${drive.label}` : ""}${drive.canEject ? " (Removable)" : ""}`;
+      return `<button class="toolbar-button drive-button ${isCurrent ? "active" : ""}" data-drive-button="${escapeHtml(drive.path)}" aria-label="Open ${escapeHtml(drive.name)}${drive.label ? `, ${escapeHtml(drive.label)}` : ""}" aria-pressed="${Boolean(isCurrent)}" title="${escapeHtml(title)}">${escapeHtml(drive.name)}</button>`;
+    })
+    .join("");
 }
 async function refreshDetectedDrives() {
   try {
     detectedDrives = await window.fileManager.roots();
     refreshDriveButtonGroups();
-  } catch { /* Keep the last detected drive buttons if discovery temporarily fails. */ }
+  } catch {
+    /* Keep the last detected drive buttons if discovery temporarily fails. */
+  }
 }
 function refreshDriveButtonGroups() {
-  for (const side of ['left', 'right']) {
-    const group = panels[side].element.querySelector('[data-drive-buttons]');
+  for (const side of ["left", "right"]) {
+    const group = panels[side].element.querySelector("[data-drive-buttons]");
     if (!group) continue;
     group.innerHTML = renderDriveButtons(side);
     bindDriveButtons(side);
   }
 }
 function bindDriveButtons(side) {
-  const group = panels[side].element.querySelector('[data-drive-buttons]');
-  group?.querySelectorAll('[data-drive-button]').forEach((button) => {
-    button.addEventListener('click', () => {
+  const group = panels[side].element.querySelector("[data-drive-buttons]");
+  group?.querySelectorAll("[data-drive-button]").forEach((button) => {
+    button.addEventListener("click", () => {
       activeSide = side;
-      panels.left.element.classList.toggle('is-active', side === 'left');
-      panels.right.element.classList.toggle('is-active', side === 'right');
+      panels.left.element.classList.toggle("is-active", side === "left");
+      panels.right.element.classList.toggle("is-active", side === "right");
       updateSummary();
       navigate(side, button.dataset.driveButton);
     });
-    button.addEventListener('contextmenu', (event) => {
+    button.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       event.stopPropagation();
       activeSide = side;
-      panels.left.element.classList.toggle('is-active', side === 'left');
-      panels.right.element.classList.toggle('is-active', side === 'right');
+      panels.left.element.classList.toggle("is-active", side === "left");
+      panels.right.element.classList.toggle("is-active", side === "right");
       updateSummary();
-      showDriveContextMenu(side, button.dataset.driveButton, event.clientX, event.clientY);
+      showDriveContextMenu(
+        side,
+        button.dataset.driveButton,
+        event.clientX,
+        event.clientY,
+      );
     });
   });
 }
 async function showDriveContextMenu(side, rootPath, x, y) {
   driveContextSide = side;
   driveContextRoot = rootPath;
-  driveContextMenu.innerHTML = '<div class="drive-context-status">Loading drive details…</div>';
+  driveContextMenu.innerHTML =
+    '<div class="drive-context-status">Loading drive details…</div>';
   driveContextMenu.hidden = false;
   driveContextMenu.style.left = `${Math.max(8, Math.min(x, innerWidth - 218))}px`;
   driveContextMenu.style.top = `${Math.max(8, Math.min(y, innerHeight - 180))}px`;
   try {
     const roots = await window.fileManager.roots();
-    if (driveContextSide !== side || driveContextRoot !== rootPath || driveContextMenu.hidden) return;
-    const root = roots.find((entry) => entry.path.toLowerCase() === rootPath.toLowerCase());
+    if (
+      driveContextSide !== side ||
+      driveContextRoot !== rootPath ||
+      driveContextMenu.hidden
+    )
+      return;
+    const root = roots.find(
+      (entry) => entry.path.toLowerCase() === rootPath.toLowerCase(),
+    );
     const driveName = root?.name || rootPath.slice(0, 2);
-    const details = root?.label ? `<small>${escapeHtml(root.label)}</small>` : '';
+    const details = root?.label
+      ? `<small>${escapeHtml(root.label)}</small>`
+      : "";
     const action = root?.canEject
       ? '<button role="menuitem" data-eject-drive>Eject</button>'
       : '<button role="menuitem" data-open-drive>Open in File Explorer</button>';
     driveContextMenu.innerHTML = `<div class="drive-context-heading"><strong>${escapeHtml(driveName)}</strong>${details}</div><div class="menu-separator"></div>${action}`;
   } catch (error) {
-    driveContextMenu.innerHTML = '<div class="drive-context-status">Could not load drive details.</div>';
+    driveContextMenu.innerHTML =
+      '<div class="drive-context-status">Could not load drive details.</div>';
     toast(`Could not load drive details: ${error.message}`);
   }
 }
-driveContextMenu.addEventListener('click', async (event) => {
+driveContextMenu.addEventListener("click", async (event) => {
   if (!driveContextRoot) return;
-  const eject = event.target.closest('[data-eject-drive]');
-  const open = event.target.closest('[data-open-drive]');
+  const eject = event.target.closest("[data-eject-drive]");
+  const open = event.target.closest("[data-open-drive]");
   if (!eject && !open) return;
   const rootPath = driveContextRoot;
   const side = driveContextSide;
@@ -504,19 +788,30 @@ driveContextMenu.addEventListener('click', async (event) => {
   const remainingRoots = await window.fileManager.roots();
   detectedDrives = remainingRoots;
   refreshDriveButtonGroups();
-  const fallback = remainingRoots.find((root) => root.path.toLowerCase() !== rootPath.toLowerCase());
-  const affectedSides = new Set((result.affected || []).map((item) => item.side));
-  for (const candidate of ['left', 'right']) {
-    if (panels[candidate].path?.toLowerCase().startsWith(rootPath.toLowerCase())) affectedSides.add(candidate);
+  const fallback = remainingRoots.find(
+    (root) => root.path.toLowerCase() !== rootPath.toLowerCase(),
+  );
+  const affectedSides = new Set(
+    (result.affected || []).map((item) => item.side),
+  );
+  for (const candidate of ["left", "right"]) {
+    if (
+      panels[candidate].path?.toLowerCase().startsWith(rootPath.toLowerCase())
+    )
+      affectedSides.add(candidate);
   }
-  if (side && panels[side].path?.toLowerCase().startsWith(rootPath.toLowerCase())) affectedSides.add(side);
+  if (
+    side &&
+    panels[side].path?.toLowerCase().startsWith(rootPath.toLowerCase())
+  )
+    affectedSides.add(side);
   for (const affectedSide of affectedSides) {
     panels[affectedSide].watchPath = null;
     const target = fallback?.path || (await window.fileManager.list()).path;
     await navigate(affectedSide, target);
   }
 });
-document.addEventListener('mousedown', (event) => {
+document.addEventListener("mousedown", (event) => {
   if (!driveContextMenu.contains(event.target)) {
     driveContextMenu.hidden = true;
     driveContextSide = null;
@@ -527,119 +822,175 @@ window.fileManager.onRestoreDirectoryWatch(({ side, directory }) => {
   const panel = panels[side];
   if (!panel || panel.path !== directory) return;
   panel.watchPath = directory;
-  window.fileManager.watchDirectory(side, directory).then((result) => {
-    if (!result.ok && panel.watchPath === directory) panel.watchPath = null;
-  }).catch(() => { if (panel.watchPath === directory) panel.watchPath = null; });
+  window.fileManager
+    .watchDirectory(side, directory)
+    .then((result) => {
+      if (!result.ok && panel.watchPath === directory) panel.watchPath = null;
+    })
+    .catch(() => {
+      if (panel.watchPath === directory) panel.watchPath = null;
+    });
 });
 function editPanelPath(side) {
   const panel = panels[side];
-  const pathbar = panel.element.querySelector('.pathbar');
-  if (!pathbar || pathbar.querySelector('.path-edit-input')) return;
-  pathbar.innerHTML = `<input class="path-edit-input" type="text" aria-label="Current folder path" spellcheck="false" value="${escapeHtml(panel.path || '')}">`;
-  pathbar.classList.remove('is-invalid');
-  const input = pathbar.querySelector('.path-edit-input');
+  const pathbar = panel.element.querySelector(".pathbar");
+  if (!pathbar || pathbar.querySelector(".path-edit-input")) return;
+  pathbar.innerHTML = `<input class="path-edit-input" type="text" aria-label="Current folder path" spellcheck="false" value="${escapeHtml(panel.path || "")}">`;
+  pathbar.classList.remove("is-invalid");
+  const input = pathbar.querySelector(".path-edit-input");
   let submitting = false;
   input.focus();
   input.select();
-  input.addEventListener('input', () => {
-    pathbar.classList.remove('is-invalid');
-    input.removeAttribute('aria-invalid');
+  input.addEventListener("input", () => {
+    pathbar.classList.remove("is-invalid");
+    input.removeAttribute("aria-invalid");
   });
-  input.addEventListener('keydown', async (event) => {
-    if (event.key === 'Escape') {
+  input.addEventListener("keydown", async (event) => {
+    if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
       renderPanel(side);
-    } else if (event.key === 'Enter') {
+    } else if (event.key === "Enter") {
       event.preventDefault();
       event.stopPropagation();
       const directory = input.value.trim();
       if (!directory) {
-        pathbar.classList.add('is-invalid');
-        input.setAttribute('aria-invalid', 'true');
+        pathbar.classList.add("is-invalid");
+        input.setAttribute("aria-invalid", "true");
         return;
       }
       submitting = true;
       const opened = await navigate(side, directory);
       submitting = false;
       if (!opened && input.isConnected) {
-        pathbar.classList.add('is-invalid');
-        input.setAttribute('aria-invalid', 'true');
+        pathbar.classList.add("is-invalid");
+        input.setAttribute("aria-invalid", "true");
         input.focus();
       }
     }
   });
-  input.addEventListener('blur', () => {
-    if (!submitting && input.isConnected && !pathbar.classList.contains('is-invalid')) renderPanel(side);
+  input.addEventListener("blur", () => {
+    if (
+      !submitting &&
+      input.isConnected &&
+      !pathbar.classList.contains("is-invalid")
+    )
+      renderPanel(side);
   });
 }
+
 function gridIcon(type) {
-  return type === 'details'
-    ? '<svg viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/><path d="M5 3v2M5 7v2M5 11v2"/></svg>'
-    : '<svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="4" height="4" rx=".7"/><rect x="9.5" y="2.5" width="4" height="4" rx=".7"/><rect x="2.5" y="9.5" width="4" height="4" rx=".7"/><rect x="9.5" y="9.5" width="4" height="4" rx=".7"/></svg>';
+  return type === "details"
+    ? '<img class="svg-icon" src="../assets/bootstrap-list-task.svg" alt="" aria-hidden="true" draggable="false">'
+    : '<img class="svg-icon" src="../assets/material-icons_grid_view.svg" alt="" aria-hidden="true" draggable="false">';
 }
 
-function actionIcon(name) {
-  const icons = {
-    sets: '<path d="M3 6.5h6l2 2h10v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/><path d="M7 12h10M7 15h7"/>',
-    'new-folder': '<path d="M3 6.5h7l2 2h9v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/><path d="M12 11v6M9 14h6"/>',    up: '<path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"/>',
-    refresh: '<path d="M4.5 9A8 8 0 0 1 18 5.5L20 9"/><path d="M20 9l-4.5-.3M20 9l-.4-4.5"/><path d="M19.5 15A8 8 0 0 1 6 18.5L4 15"/><path d="M4 15l4.5.3M4 15l.4 4.5"/>',
-    left: '<path d="M12 19l-7-7 7-7"/>',
-    right: '<path d="m12 5 7 7-7 7"/>',
-    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
-    cut: '<circle cx="6" cy="6" r="2.2"/><circle cx="6" cy="18" r="2.2"/><path d="m8 7 12 12M8 17 20 5"/>',
-    paste: '<path d="M9 4.5h6a2 2 0 0 1 2 2V8H7V6.5a2 2 0 0 1 2-2Z"/><path d="M7 6H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-2M7 8h10M15 15h7M18.5 11.5v7"/>',
-    rename: '<path d="M12 20h9"/><path d="m16.5 3.5 4 4L9 19l-5 1 1-5Z"/>',
-    delete: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'
+const actionIcon = (name) => {
+  const paths = {
+    sets: '<img class="svg-icon" src="../assets/material-icons_folder_special.svg" alt="" aria-hidden="true" draggable="false">',
+    "new-folder":
+      '<img class="svg-icon" src="../assets/material-icons_create_new_folder.svg" alt="" aria-hidden="true" draggable="false">',
+    up: '<img class="svg-icon" src="../assets/material-icons_arrow_upward.svg" alt="" aria-hidden="true" draggable="false">',
+    refresh:
+      '<img class="svg-icon" src="../assets/material-icons_refresh.svg" alt="" aria-hidden="true" draggable="false">',
+    left: '<img class="svg-icon" src="../assets/material-icons_keyboard_arrow_left.svg" alt="" aria-hidden="true" draggable="false">',
+    right:
+      '<img class="svg-icon" src="../assets/material-icons_keyboard_arrow_right.svg" alt="" aria-hidden="true" draggable="false">',
+    copy: '<img class="svg-icon" src="../assets/material-icons_file_copy.svg" alt="" aria-hi  dden="true" draggable="false">',
+    cut: '<img class="svg-icon" src="../assets/material-icons_content_cut.svg" alt="" aria-hidden="true" draggable="false">',
+    paste:
+      '<img class="svg-icon" src="../assets/material-icons_content_paste.svg" alt="" aria-hidden="true" draggable="false">',
+    rename:
+      '<img class="svg-icon" src="../assets/material-icons_drive_file_rename_outline.svg" alt="" aria-hidden="true" draggable="false">',
+    delete:
+      '<img class="svg-icon" src="../assets/material-icons_delete.svg" alt="" aria-hidden="true" draggable="false">',
   };
-  return `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name]}</svg>`;
-}
+  return `${paths[name]}`;
+};
+
+// ============================================================================
+// 10. ENTRIES RENDERING & SEARCH ENGINE
+// ============================================================================
 function entryAttributes(entry, side, index, tile = false) {
   const cls = kind(entry);
   const selected = panels[side].selected.has(entry.path);
-  return `${tile ? 'class="icon-tile' : 'class="file-row'} ${selected ? 'selected' : ''}" data-entry="${index}" draggable="true" tabindex="0"`;
+  return `${tile ? 'class="icon-tile' : 'class="file-row'} ${selected ? "selected" : ""}" data-entry="${index}" draggable="true" tabindex="0"`;
 }
 function searchLocation(entry, panel) {
-  if (!panel.searchRoot) return '';
-  const relative = entry.path.slice(panel.searchRoot.length).replace(/^[\\/]+/, '').split(/[\\/]/).slice(0, -1).join(' › ');
-  return relative || '.';
+  if (!panel.searchRoot) return "";
+  const relative = entry.path
+    .slice(panel.searchRoot.length)
+    .replace(/^[\\/]+/, "")
+    .split(/[\\/]/)
+    .slice(0, -1)
+    .join(" › ");
+  return relative || ".";
 }
 function renderEntries(side) {
   const panel = panels[side];
-  if (panel.view === 'details') {
-    const visibleEntries = panel.entries.filter((entry) => preferences.showHidden || !entry.name.startsWith('.'));
+  if (panel.view === "details") {
+    const visibleEntries = panel.entries.filter(
+      (entry) => preferences.showHidden || !entry.name.startsWith("."),
+    );
     const sortedEntries = [...visibleEntries].sort((a, b) => {
       let comparison = 0;
-      if (preferences.groupFolders && a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-      if (panel.sortBy === 'name') comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-      else if (panel.sortBy === 'size') comparison = (a.size || 0) - (b.size || 0);
-      else comparison = new Date(a.modified || 0).getTime() - new Date(b.modified || 0).getTime();
-      return comparison * (panel.sortDirection === 'asc' ? 1 : -1);
+      if (preferences.groupFolders && a.isDirectory !== b.isDirectory)
+        return a.isDirectory ? -1 : 1;
+      if (panel.sortBy === "name")
+        comparison = a.name.localeCompare(b.name, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+      else if (panel.sortBy === "size")
+        comparison = (a.size || 0) - (b.size || 0);
+      else
+        comparison =
+          new Date(a.modified || 0).getTime() -
+          new Date(b.modified || 0).getTime();
+      return comparison * (panel.sortDirection === "asc" ? 1 : -1);
     });
-    const rows = sortedEntries.map((entry) => {
-      const index = panel.entries.indexOf(entry);
-      return `<tr ${entryAttributes(entry, side, index)}><td><div class="name-cell"><span class="file-icon ${kind(entry)}">${icon(kind(entry))}</span><span class="search-result-label"><span class="file-name" title="${escapeHtml(entry.path)}">${escapeHtml(entry.name)}</span>${panel.searchRoot ? `<span class="search-result-location">${escapeHtml(searchLocation(entry, panel))}</span>` : ''}</span></div></td><td>${formatSize(entry.size, entry.isDirectory)}</td><td class="date-cell">${formatDate(entry.modified)}</td></tr>`;
-    }).join('');
-    const colgroup = panel.columns.map((width) => `<col style="width:${width}%">`).join('');
-    const heading = (key, label, boundary = null) => `<th><button class="column-sort" data-sort="${key}">${label}${panel.sortBy === key ? `<span class="sort-arrow" aria-label="sorted ${panel.sortDirection === 'asc' ? 'ascending' : 'descending'}">${panel.sortDirection === 'asc' ? '▲' : '▼'}</span>` : ''}</button>${boundary === null ? '' : `<span class="column-grip" data-column-boundary="${boundary}" title="Resize ${label} column" aria-label="Resize ${label} column"></span>`}</th>`;
-    const emptyState = visibleEntries.length ? '' : `<div class="empty-state">${icon('folder')}<strong>${panel.searchRoot ? 'No matches found' : panel.entries.length ? 'No visible items' : 'This folder is empty'}</strong><span>${panel.searchRoot ? `Search: ${escapeHtml(document.querySelector('#search-query').value)}` : panel.entries.length ? 'Hidden items are not shown' : 'Drop files here to add them'}</span></div>`;
-    return `<div class="file-area"><table class="file-list" style="--name-width:${panel.columns[0]}%;--size-width:${panel.columns[1]}%;--date-width:${panel.columns[2]}%"><colgroup>${colgroup}</colgroup><thead><tr>${heading('name', 'Name', 0)}${heading('size', 'Size', 1)}${heading('modified', 'Date modified')}</tr></thead><tbody>${rows}</tbody></table>${emptyState}</div>`;
+    const rows = sortedEntries
+      .map((entry) => {
+        const index = panel.entries.indexOf(entry);
+        return `<tr ${entryAttributes(entry, side, index)}><td><div class="name-cell"><span class="file-icon ${kind(entry)}">${icon(kind(entry))}</span><span class="search-result-label"><span class="file-name" title="${escapeHtml(entry.path)}">${escapeHtml(entry.name)}</span>${panel.searchRoot ? `<span class="search-result-location">${escapeHtml(searchLocation(entry, panel))}</span>` : ""}</span></div></td><td>${formatSize(entry.size, entry.isDirectory)}</td><td class="date-cell">${formatDate(entry.modified)}</td></tr>`;
+      })
+      .join("");
+    const colgroup = panel.columns
+      .map((width) => `<col style="width:${width}%">`)
+      .join("");
+    const heading = (key, label, boundary = null) =>
+      `<th><button class="column-sort" data-sort="${key}">${label}${panel.sortBy === key ? `<span class="sort-arrow" aria-label="sorted ${panel.sortDirection === "asc" ? "ascending" : "descending"}">${panel.sortDirection === "asc" ? "▲" : "▼"}</span>` : ""}</button>${boundary === null ? "" : `<span class="column-grip" data-column-boundary="${boundary}" title="Resize ${label} column" aria-label="Resize ${label} column"></span>`}</th>`;
+    const emptyState = visibleEntries.length
+      ? ""
+      : `<div class="empty-state">${icon("folder")}<strong>${panel.searchRoot ? "No matches found" : panel.entries.length ? "No visible items" : "This folder is empty"}</strong><span>${panel.searchRoot ? `Search: ${escapeHtml(document.querySelector("#search-query").value)}` : panel.entries.length ? "Hidden items are not shown" : "Drop files here to add them"}</span></div>`;
+    return `<div class="file-area"><table class="file-list" style="--name-width:${panel.columns[0]}%;--size-width:${panel.columns[1]}%;--date-width:${panel.columns[2]}%"><colgroup>${colgroup}</colgroup><thead><tr>${heading("name", "Name", 0)}${heading("size", "Size", 1)}${heading("modified", "Date modified")}</tr></thead><tbody>${rows}</tbody></table>${emptyState}</div>`;
   }
   const tileSize = panel.iconSize + 48;
-  const visibleEntries = panel.entries.filter((entry) => preferences.showHidden || !entry.name.startsWith('.'));
+  const visibleEntries = panel.entries.filter(
+    (entry) => preferences.showHidden || !entry.name.startsWith("."),
+  );
   const orderedEntries = [...visibleEntries].sort((a, b) => {
-    if (preferences.groupFolders && a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    if (preferences.groupFolders && a.isDirectory !== b.isDirectory)
+      return a.isDirectory ? -1 : 1;
+    return a.name.localeCompare(b.name, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
   });
-  const tiles = orderedEntries.map((entry) => `<div ${entryAttributes(entry, side, panel.entries.indexOf(entry), true)} style="width:${tileSize}px;height:${tileSize}px"><div class="tile-visual ${kind(entry)}" style="width:${panel.iconSize}px;height:${panel.iconSize}px">${icon(kind(entry))}</div><div class="tile-name" title="${escapeHtml(entry.path)}">${escapeHtml(entry.name)}${panel.searchRoot ? `<span class="search-result-location">${escapeHtml(searchLocation(entry, panel))}</span>` : ''}</div></div>`).join('');
-  return `<div class="file-area"><div class="icon-grid" style="--tile-width:${tileSize}px">${tiles}</div>${visibleEntries.length ? '' : '<div class="empty-state">'+icon('folder')+`<strong>${panel.searchRoot ? 'No matches found' : 'This folder is empty'}</strong><span>${panel.searchRoot ? 'Try another name or pattern' : 'Drop files here to add them'}</span>`+'</div>'}</div>`;
+  const tiles = orderedEntries
+    .map(
+      (entry) =>
+        `<div ${entryAttributes(entry, side, panel.entries.indexOf(entry), true)} style="width:${tileSize}px;height:${tileSize}px"><div class="tile-visual ${kind(entry)}" style="width:${panel.iconSize}px;height:${panel.iconSize}px">${icon(kind(entry))}</div><div class="tile-name" title="${escapeHtml(entry.path)}">${escapeHtml(entry.name)}${panel.searchRoot ? `<span class="search-result-location">${escapeHtml(searchLocation(entry, panel))}</span>` : ""}</div></div>`,
+    )
+    .join("");
+  return `<div class="file-area"><div class="icon-grid" style="--tile-width:${tileSize}px">${tiles}</div>${visibleEntries.length ? "" : '<div class="empty-state">' + icon("folder") + `<strong>${panel.searchRoot ? "No matches found" : "This folder is empty"}</strong><span>${panel.searchRoot ? "Try another name or pattern" : "Drop files here to add them"}</span>` + "</div>"}</div>`;
 }
 function renderPanel(side, { loadThumbnails = true } = {}) {
   const panel = panels[side];
   const thumbnailGeneration = ++panel.thumbnailGeneration;
-  panel.element.classList.toggle('is-active', activeSide === side);
+  panel.element.classList.toggle("is-active", activeSide === side);
   panel.element.innerHTML = `${panelChrome(side)}${renderEntries(side)}<div class="panel-bottom">${panelStatus(panel)}</div>`;
-  if (panel.view === 'icons') {
+  if (panel.view === "icons") {
     applyThumbnailSize(panel);
     if (loadThumbnails) loadThumbnailImages(side, thumbnailGeneration);
   }
@@ -647,16 +998,18 @@ function renderPanel(side, { loadThumbnails = true } = {}) {
   updateSummary();
 }
 
-const searchForm = document.querySelector('#global-search');
-const searchQuery = document.querySelector('#search-query');
-const searchMode = document.querySelector('#search-mode');
-const searchCancel = document.querySelector('#search-cancel');
+const searchForm = document.querySelector("#global-search");
+const searchQuery = document.querySelector("#search-query");
+const searchMode = document.querySelector("#search-mode");
+const searchCancel = document.querySelector("#search-cancel");
 let searchDebounceTimer = null;
 let searchRenderTimer = null;
 function updateSearchControl() {
   searchCancel.hidden = !searchQuery.value;
-  searchCancel.title = panels[activeSide].searchId ? 'Cancel search' : 'Clear search results';
-  searchCancel.setAttribute('aria-label', searchCancel.title);
+  searchCancel.title = panels[activeSide].searchId
+    ? "Cancel search"
+    : "Clear search results";
+  searchCancel.setAttribute("aria-label", searchCancel.title);
 }
 async function runPanelSearch() {
   const side = activeSide;
@@ -671,19 +1024,33 @@ async function runPanelSearch() {
   panel.searchMatches = [];
   panel.selected.clear();
   updateSearchControl();
-  setStatus('Searching file names…');
+  setStatus("Searching file names…");
   renderPanel(side);
   try {
-    const result = await window.fileManager.search({ searchId, root, query, mode: searchMode.value });
+    const result = await window.fileManager.search({
+      searchId,
+      root,
+      query,
+      mode: searchMode.value,
+    });
     if (panel.searchId !== searchId) return;
     panel.searchId = null;
     panel.searchRoot = root;
     clearTimeout(searchRenderTimer);
-    panel.entries = result.results.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    panel.entries = result.results.sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      }),
+    );
     panel.selected.clear();
     updateSearchControl();
     renderPanel(side);
-    setStatus(result.cancelled ? `Search cancelled · ${result.results.length} matches` : `Search complete · ${result.results.length} matches`);
+    setStatus(
+      result.cancelled
+        ? `Search cancelled · ${result.results.length} matches`
+        : `Search complete · ${result.results.length} matches`,
+    );
   } catch (error) {
     if (panel.searchId !== searchId) return;
     panel.searchId = null;
@@ -693,25 +1060,37 @@ async function runPanelSearch() {
     toast(error.message);
   }
 }
-window.fileManager.onSearchProgress(({ searchId, scanned, matches, results = [] }) => {
-  const side = ['left', 'right'].find((candidate) => panels[candidate].searchId === searchId);
-  if (!side) return;
-  const panel = panels[side];
-  panel.searchMatches.push(...results);
-  if (side === activeSide) setStatus(`Searching… ${scanned.toLocaleString()} checked · ${matches} matches`);
-  clearTimeout(searchRenderTimer);
-  searchRenderTimer = setTimeout(() => {
-    if (panel.searchId !== searchId) return;
-    panel.entries = [...panel.searchMatches].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-    renderPanel(side, { loadThumbnails: false });
-  }, 120);
-});
-searchForm.addEventListener('submit', (event) => {
+window.fileManager.onSearchProgress(
+  ({ searchId, scanned, matches, results = [] }) => {
+    const side = ["left", "right"].find(
+      (candidate) => panels[candidate].searchId === searchId,
+    );
+    if (!side) return;
+    const panel = panels[side];
+    panel.searchMatches.push(...results);
+    if (side === activeSide)
+      setStatus(
+        `Searching… ${scanned.toLocaleString()} checked · ${matches} matches`,
+      );
+    clearTimeout(searchRenderTimer);
+    searchRenderTimer = setTimeout(() => {
+      if (panel.searchId !== searchId) return;
+      panel.entries = [...panel.searchMatches].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        }),
+      );
+      renderPanel(side, { loadThumbnails: false });
+    }, 120);
+  },
+);
+searchForm.addEventListener("submit", (event) => {
   event.preventDefault();
   clearTimeout(searchDebounceTimer);
   runPanelSearch();
 });
-searchQuery.addEventListener('input', () => {
+searchQuery.addEventListener("input", () => {
   updateSearchControl();
   clearTimeout(searchDebounceTimer);
   if (searchQuery.value.trim()) {
@@ -721,66 +1100,82 @@ searchQuery.addEventListener('input', () => {
   const panel = panels[activeSide];
   if (panel.searchRoot) navigate(activeSide, panel.searchRoot);
 });
-searchQuery.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
+searchQuery.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
     event.preventDefault();
     const panel = panels[activeSide];
     if (panel.searchId) window.fileManager.cancelSearch(panel.searchId);
     if (panel.searchRoot) navigate(activeSide, panel.searchRoot);
-    searchQuery.value = '';
+    searchQuery.value = "";
     updateSearchControl();
   }
 });
-searchCancel.addEventListener('click', () => {
+searchCancel.addEventListener("click", () => {
   const panel = panels[activeSide];
   if (panel.searchId) window.fileManager.cancelSearch(panel.searchId);
   if (panel.searchRoot) navigate(activeSide, panel.searchRoot);
-  searchQuery.value = '';
+  searchQuery.value = "";
   updateSearchControl();
 });
+
+// ============================================================================
+// 11. THUMBNAILS, STATUS & HISTORY
+// ============================================================================
 function applyThumbnailSize(panel) {
-  const grid = panel.element.querySelector('.icon-grid');
+  const grid = panel.element.querySelector(".icon-grid");
   if (!grid) return;
   const tileSize = panel.iconSize + 48;
-  grid.style.setProperty('--tile-width', `${tileSize}px`);
-  grid.querySelectorAll('.icon-tile').forEach((tile) => {
+  grid.style.setProperty("--tile-width", `${tileSize}px`);
+  grid.querySelectorAll(".icon-tile").forEach((tile) => {
     tile.style.width = `${tileSize}px`;
     tile.style.height = `${tileSize}px`;
   });
-  grid.querySelectorAll('.tile-visual').forEach((visual) => {
+  grid.querySelectorAll(".tile-visual").forEach((visual) => {
     visual.style.width = `${panel.iconSize}px`;
     visual.style.height = `${panel.iconSize}px`;
-    const svg = visual.querySelector('svg');
-    svg?.style.setProperty('width', `${panel.iconSize}px`, 'important');
-    svg?.style.setProperty('height', `${panel.iconSize}px`, 'important');
+    const svg = visual.querySelector("svg");
+    svg?.style.setProperty("width", `${panel.iconSize}px`, "important");
+    svg?.style.setProperty("height", `${panel.iconSize}px`, "important");
   });
 }
 async function loadThumbnailImages(side, generation) {
   const panel = panels[side];
-  const tiles = [...panel.element.querySelectorAll('.icon-tile')].filter((tile) => {
-    const entry = panel.entries[Number(tile.dataset.entry)];
-    return entry && isImageEntry(entry);
-  });
+  const tiles = [...panel.element.querySelectorAll(".icon-tile")].filter(
+    (tile) => {
+      const entry = panel.entries[Number(tile.dataset.entry)];
+      return entry && isImageEntry(entry);
+    },
+  );
   let nextIndex = 0;
   const loadNext = async () => {
-    while (nextIndex < tiles.length && panel.thumbnailGeneration === generation) {
+    while (
+      nextIndex < tiles.length &&
+      panel.thumbnailGeneration === generation
+    ) {
       const tile = tiles[nextIndex++];
       const entry = panel.entries[Number(tile.dataset.entry)];
       if (!entry || !tile.isConnected) continue;
       try {
-        const dataUrl = await window.fileManager.thumbnail(entry.path, preferences.thumbnailCachePath);
+        const dataUrl = await window.fileManager.thumbnail(
+          entry.path,
+          preferences.thumbnailCachePath,
+        );
         if (panel.thumbnailGeneration !== generation) return;
-        const visual = tile.querySelector('.tile-visual');
+        const visual = tile.querySelector(".tile-visual");
         if (!dataUrl || !visual?.isConnected || !tile.isConnected) continue;
-        const thumbnail = document.createElement('img');
-        thumbnail.className = 'thumbnail-image';
-        thumbnail.alt = '';
+        const thumbnail = document.createElement("img");
+        thumbnail.className = "thumbnail-image";
+        thumbnail.alt = "";
         thumbnail.src = dataUrl;
         visual.replaceChildren(thumbnail);
-      } catch { /* Keep the file type icon when a preview cannot be created. */ }
+      } catch {
+        /* Keep the file type icon when a preview cannot be created. */
+      }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(4, tiles.length) }, loadNext));
+  await Promise.all(
+    Array.from({ length: Math.min(4, tiles.length) }, loadNext),
+  );
 }
 function updateSummary() {
   updateHistoryButtons();
@@ -788,36 +1183,51 @@ function updateSummary() {
   const requestId = ++diskSpaceRequestId;
   clearTimeout(diskSpaceTimer);
   if (!directory) {
-    summary.textContent = 'Drive space unavailable';
+    summary.textContent = "Drive space unavailable";
     displayedSpacePath = null;
     return;
   }
-  if (displayedSpacePath !== directory) summary.textContent = 'Reading drive space…';
+  if (displayedSpacePath !== directory)
+    summary.textContent = "Reading drive space…";
   diskSpaceTimer = setTimeout(async () => {
     try {
       const space = await window.fileManager.diskSpace(directory);
-      if (requestId !== diskSpaceRequestId || panels[activeSide].path !== directory) return;
+      if (
+        requestId !== diskSpaceRequestId ||
+        panels[activeSide].path !== directory
+      )
+        return;
       summary.textContent = `Used ${formatSize(space.used, false)} · Free ${formatSize(space.free, false)}`;
       displayedSpacePath = directory;
     } catch {
-      if (requestId !== diskSpaceRequestId || panels[activeSide].path !== directory) return;
-      summary.textContent = 'Drive space unavailable';
+      if (
+        requestId !== diskSpaceRequestId ||
+        panels[activeSide].path !== directory
+      )
+        return;
+      summary.textContent = "Drive space unavailable";
       displayedSpacePath = directory;
     }
   }, 120);
 }
 function panelStatus(panel) {
   const selectedCount = panel.selected.size;
-  const selectedFiles = panel.entries.filter((entry) => panel.selected.has(entry.path) && !entry.isDirectory);
-  const fileBytes = selectedFiles.reduce((sum, entry) => sum + (entry.size || 0), 0);
-  return `<strong>${selectedCount || panel.entries.length}</strong>&nbsp;${selectedCount ? 'selected' : panel.searchRoot ? 'matches' : 'items'}<span class="bottom-spacer"></span>${selectedCount && selectedFiles.length ? `<span class="panel-selection-size">${formatSize(fileBytes, false)}</span>` : ''}`;
+  const selectedFiles = panel.entries.filter(
+    (entry) => panel.selected.has(entry.path) && !entry.isDirectory,
+  );
+  const fileBytes = selectedFiles.reduce(
+    (sum, entry) => sum + (entry.size || 0),
+    0,
+  );
+  return `<strong>${selectedCount || panel.entries.length}</strong>&nbsp;${selectedCount ? "selected" : panel.searchRoot ? "matches" : "items"}<span class="bottom-spacer"></span>${selectedCount && selectedFiles.length ? `<span class="panel-selection-size">${formatSize(fileBytes, false)}</span>` : ""}`;
 }
 function updateHistoryButtons() {
   const panel = panels[activeSide];
   const back = document.querySelector('[data-action="back"]');
   const forward = document.querySelector('[data-action="forward"]');
   back.disabled = panel.historyIndex <= 0;
-  forward.disabled = panel.historyIndex < 0 || panel.historyIndex >= panel.history.length - 1;
+  forward.disabled =
+    panel.historyIndex < 0 || panel.historyIndex >= panel.history.length - 1;
 }
 function moveHistory(side, offset) {
   const panel = panels[side];
@@ -827,61 +1237,86 @@ function moveHistory(side, offset) {
 }
 function moveHistoryTo(side, targetIndex) {
   const panel = panels[side];
-  if (targetIndex < 0 || targetIndex >= panel.history.length || targetIndex === panel.historyIndex) return;
-  navigate(side, panel.history[targetIndex], { historyMode: 'move', historyIndex: targetIndex });
+  if (
+    targetIndex < 0 ||
+    targetIndex >= panel.history.length ||
+    targetIndex === panel.historyIndex
+  )
+    return;
+  navigate(side, panel.history[targetIndex], {
+    historyMode: "move",
+    historyIndex: targetIndex,
+  });
 }
 function showHistoryMenu(action, button) {
   const panel = panels[activeSide];
-  const indices = action === 'back'
-    ? Array.from({ length: Math.max(0, panel.historyIndex) }, (_, index) => panel.historyIndex - index - 1)
-    : Array.from({ length: Math.max(0, panel.history.length - panel.historyIndex - 1) }, (_, index) => panel.historyIndex + index + 1);
+  const indices =
+    action === "back"
+      ? Array.from(
+          { length: Math.max(0, panel.historyIndex) },
+          (_, index) => panel.historyIndex - index - 1,
+        )
+      : Array.from(
+          {
+            length: Math.max(0, panel.history.length - panel.historyIndex - 1),
+          },
+          (_, index) => panel.historyIndex + index + 1,
+        );
   if (!indices.length) return;
   const side = activeSide;
-  historyMenu.innerHTML = indices.map((index) => {
-    const directory = panel.history[index];
-    return `<button role="menuitem" data-history-side="${side}" data-history-index="${index}" title="${escapeHtml(directory)}">${escapeHtml(directory)}</button>`;
-  }).join('');
+  historyMenu.innerHTML = indices
+    .map((index) => {
+      const directory = panel.history[index];
+      return `<button role="menuitem" data-history-side="${side}" data-history-index="${index}" title="${escapeHtml(directory)}">${escapeHtml(directory)}</button>`;
+    })
+    .join("");
   const bounds = button.getBoundingClientRect();
   historyMenu.hidden = false;
   historyMenu.style.left = `${Math.max(8, Math.min(bounds.left, innerWidth - 330))}px`;
   historyMenu.style.top = `${Math.max(8, Math.min(bounds.bottom + 4, innerHeight - Math.min(historyMenu.scrollHeight, 334) - 8))}px`;
 }
 function bindHistoryLongPress() {
-  document.querySelectorAll('[data-action="back"],[data-action="forward"]').forEach((button) => {
-    let holdTimer = null;
-    let startX = 0;
-    let startY = 0;
-    button.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0 || button.disabled) return;
-      startX = event.clientX;
-      startY = event.clientY;
-      button.setPointerCapture(event.pointerId);
-      holdTimer = setTimeout(() => {
-        showHistoryMenu(button.dataset.action, button);
-        button.dataset.historyLongPress = 'true';
-      }, 450);
+  document
+    .querySelectorAll('[data-action="back"],[data-action="forward"]')
+    .forEach((button) => {
+      let holdTimer = null;
+      let startX = 0;
+      let startY = 0;
+      button.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0 || button.disabled) return;
+        startX = event.clientX;
+        startY = event.clientY;
+        button.setPointerCapture(event.pointerId);
+        holdTimer = setTimeout(() => {
+          showHistoryMenu(button.dataset.action, button);
+          button.dataset.historyLongPress = "true";
+        }, 450);
+      });
+      const clearHold = () => {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      };
+      button.addEventListener("pointermove", (event) => {
+        if (Math.hypot(event.clientX - startX, event.clientY - startY) > 8)
+          clearHold();
+      });
+      button.addEventListener("pointerup", clearHold);
+      button.addEventListener("pointercancel", clearHold);
+      button.addEventListener("click", (event) => {
+        if (button.dataset.historyLongPress === "true") {
+          delete button.dataset.historyLongPress;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      });
     });
-    const clearHold = () => { clearTimeout(holdTimer); holdTimer = null; };
-    button.addEventListener('pointermove', (event) => {
-      if (Math.hypot(event.clientX - startX, event.clientY - startY) > 8) clearHold();
-    });
-    button.addEventListener('pointerup', clearHold);
-    button.addEventListener('pointercancel', clearHold);
-    button.addEventListener('click', (event) => {
-      if (button.dataset.historyLongPress === 'true') {
-        delete button.dataset.historyLongPress;
-        event.preventDefault();
-        event.stopImmediatePropagation();
-      }
-    });
-  });
-  historyMenu.addEventListener('click', (event) => {
-    const item = event.target.closest('[data-history-index]');
+  historyMenu.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-history-index]");
     if (!item) return;
     historyMenu.hidden = true;
     moveHistoryTo(item.dataset.historySide, Number(item.dataset.historyIndex));
   });
-  document.addEventListener('mousedown', (event) => {
+  document.addEventListener("mousedown", (event) => {
     if (!historyMenu.contains(event.target)) historyMenu.hidden = true;
   });
 }
@@ -889,51 +1324,82 @@ bindHistoryLongPress();
 window.fileManager.onDirectoryChanged(({ side, directory }) => {
   const panel = panels[side];
   if (!panel || panel.path !== directory) return;
-  window.fileManager.list(directory).then((result) => {
-    if (panel.path !== directory) return;
-    panel.entries = result.entries;
-    const availablePaths = new Set(result.entries.map((entry) => entry.path));
-    for (const selectedPath of panel.selected) {
-      if (!availablePaths.has(selectedPath)) panel.selected.delete(selectedPath);
-    }
-    renderPanel(side);
-  }).catch(() => {});
+  window.fileManager
+    .list(directory)
+    .then((result) => {
+      if (panel.path !== directory) return;
+      panel.entries = result.entries;
+      const availablePaths = new Set(result.entries.map((entry) => entry.path));
+      for (const selectedPath of panel.selected) {
+        if (!availablePaths.has(selectedPath))
+          panel.selected.delete(selectedPath);
+      }
+      renderPanel(side);
+    })
+    .catch(() => {});
 });
-document.addEventListener('auxclick', (event) => {
+document.addEventListener("auxclick", (event) => {
   if (event.button !== 3 && event.button !== 4) return;
   event.preventDefault();
   event.stopPropagation();
   moveHistory(activeSide, event.button === 3 ? -1 : 1);
 });
+
+// ============================================================================
+// 12. DIRECTORY SETS, BOOKMARKS & SETTINGS MODAL
+// ============================================================================
 function directorySetLabel(set) {
   if (set.name?.trim()) return set.name.trim();
-  if (set.type === 'pair') return `${bookmarkLabel(set.leftPath)} ↔ ${bookmarkLabel(set.rightPath)}`;
+  if (set.type === "pair")
+    return `${bookmarkLabel(set.leftPath)} ↔ ${bookmarkLabel(set.rightPath)}`;
   return bookmarkLabel(set.path);
 }
-function bookmarkLabel(directory = '') {
+function bookmarkLabel(directory = "") {
   return directory.split(/[\\/]/).filter(Boolean).at(-1) || directory;
 }
 function directorySetDetails(set) {
-  if (set.type === 'pair') return [['Left', set.leftPath], ['Right', set.rightPath]];
-  const target = set.openIn === 'left' ? 'Left' : set.openIn === 'right' ? 'Right' : 'Active';
+  if (set.type === "pair")
+    return [
+      ["Left", set.leftPath],
+      ["Right", set.rightPath],
+    ];
+  const target =
+    set.openIn === "left"
+      ? "Left"
+      : set.openIn === "right"
+        ? "Right"
+        : "Active";
   return [[target, set.path]];
 }
 function orderedDirectorySets() {
   const items = preferences.directorySets.map((set, index) => ({ set, index }));
-  if (preferences.directorySetSort === 'alphabetical') {
-    items.sort((a, b) => directorySetLabel(a.set).localeCompare(directorySetLabel(b.set), undefined, { numeric: true, sensitivity: 'base' }));
+  if (preferences.directorySetSort === "alphabetical") {
+    items.sort((a, b) =>
+      directorySetLabel(a.set).localeCompare(
+        directorySetLabel(b.set),
+        undefined,
+        { numeric: true, sensitivity: "base" },
+      ),
+    );
   }
   return items;
 }
 async function openDirectorySet(set, activePanel = activeSide) {
-  if (set.type === 'pair') return Promise.all([navigate('left', set.leftPath), navigate('right', set.rightPath)]);
-  const target = set.openIn === 'left' || set.openIn === 'right' ? set.openIn : activePanel;
+  if (set.type === "pair")
+    return Promise.all([
+      navigate("left", set.leftPath),
+      navigate("right", set.rightPath),
+    ]);
+  const target =
+    set.openIn === "left" || set.openIn === "right" ? set.openIn : activePanel;
   return navigate(target, set.path);
 }
 function closeDirectorySetMenu() {
   directorySetMenu.hidden = true;
   if (directorySetMenuSide) {
-    panels[directorySetMenuSide].element.querySelector('[data-action="directory-sets"]')?.setAttribute('aria-expanded', 'false');
+    panels[directorySetMenuSide].element
+      .querySelector('[data-action="directory-sets"]')
+      ?.setAttribute("aria-expanded", "false");
   }
   directorySetMenuSide = null;
 }
@@ -945,25 +1411,43 @@ function showDirectorySetMenu(side, button) {
   closeDirectorySetMenu();
   directorySetMenuSide = side;
   activeSide = side;
-  panels.left.element.classList.toggle('is-active', side === 'left');
-  panels.right.element.classList.toggle('is-active', side === 'right');
-  button.setAttribute('aria-expanded', 'true');
+  panels.left.element.classList.toggle("is-active", side === "left");
+  panels.right.element.classList.toggle("is-active", side === "right");
+  button.setAttribute("aria-expanded", "true");
   const orderedSets = orderedDirectorySets();
   directorySetMenu.innerHTML = orderedSets.length
-    ? orderedSets.map(({ set, index }) => `<button role="menuitem" data-menu-directory-set="${index}"><strong>${escapeHtml(directorySetLabel(set))}</strong><span class="directory-set-locations">${directorySetDetails(set).map(([label, directory]) => `<span class="directory-set-location-label">${escapeHtml(label)}</span><span class="directory-set-location-path">${escapeHtml(directory || '')}</span>`).join('')}</span></button>`).join('')
+    ? orderedSets
+        .map(
+          ({ set, index }) =>
+            `<button role="menuitem" data-menu-directory-set="${index}"><strong>${escapeHtml(directorySetLabel(set))}</strong><span class="directory-set-locations">${directorySetDetails(
+              set,
+            )
+              .map(
+                ([label, directory]) =>
+                  `<span class="directory-set-location-label">${escapeHtml(label)}</span><span class="directory-set-location-path">${escapeHtml(directory || "")}</span>`,
+              )
+              .join("")}</span></button>`,
+        )
+        .join("")
     : '<div class="directory-set-menu-empty">No directory sets saved.</div>';
   directorySetMenu.hidden = false;
   const bounds = button.getBoundingClientRect();
   const menuWidth = directorySetMenu.offsetWidth;
   const menuHeight = directorySetMenu.offsetHeight;
-  const left = Math.max(8, Math.min(bounds.right - menuWidth, innerWidth - menuWidth - 8));
+  const left = Math.max(
+    8,
+    Math.min(bounds.right - menuWidth, innerWidth - menuWidth - 8),
+  );
   const below = bounds.bottom + 6;
-  const top = below + menuHeight <= innerHeight - 8 ? below : Math.max(8, bounds.top - menuHeight - 6);
+  const top =
+    below + menuHeight <= innerHeight - 8
+      ? below
+      : Math.max(8, bounds.top - menuHeight - 6);
   directorySetMenu.style.left = `${left}px`;
   directorySetMenu.style.top = `${top}px`;
 }
-directorySetMenu.addEventListener('click', async (event) => {
-  const item = event.target.closest('[data-menu-directory-set]');
+directorySetMenu.addEventListener("click", async (event) => {
+  const item = event.target.closest("[data-menu-directory-set]");
   if (!item) return;
   const set = preferences.directorySets[Number(item.dataset.menuDirectorySet)];
   const side = directorySetMenuSide || activeSide;
@@ -973,57 +1457,79 @@ directorySetMenu.addEventListener('click', async (event) => {
 function renderDirectorySets() {
   if (directorySetDraft) {
     const draft = directorySetDraft;
-    const isPair = draft.type === 'pair';
-    settingsContent.innerHTML = `<h2>${draft.index === null ? 'New directory set' : 'Edit directory set'}</h2><p class="settings-description">Save one location or a left/right directory pair.</p><label class="directory-set-field"><span>Name <small>(optional)</small></span><input data-set-field="name" value="${escapeHtml(draft.name || '')}" placeholder="For example, Project files"></label><label class="directory-set-field"><span>Set type</span><select data-set-field="type"><option value="single" ${!isPair ? 'selected' : ''}>Single directory</option><option value="pair" ${isPair ? 'selected' : ''}>Directory pair</option></select></label>${isPair ? `<div class="directory-set-field"><span>Left panel directory</span><div class="directory-path-input"><input data-set-field="leftPath" value="${escapeHtml(draft.leftPath || '')}" placeholder="Choose a folder"><button data-browse-field="leftPath">Browse…</button><button data-use-panel="left" title="Use current left panel folder">Use left</button></div></div><div class="directory-set-field"><span>Right panel directory</span><div class="directory-path-input"><input data-set-field="rightPath" value="${escapeHtml(draft.rightPath || '')}" placeholder="Choose a folder"><button data-browse-field="rightPath">Browse…</button><button data-use-panel="right" title="Use current right panel folder">Use right</button></div></div><p class="settings-hint">Opening a pair places its left and right directories in their matching panels.</p>` : `<div class="directory-set-field"><span>Directory</span><div class="directory-path-input"><input data-set-field="path" value="${escapeHtml(draft.path || '')}" placeholder="Choose a folder"><button data-browse-field="path">Browse…</button><button data-use-panel="left" title="Use current left panel folder">Use left</button><button data-use-panel="right" title="Use current right panel folder">Use right</button></div></div><label class="directory-set-field"><span>Open in panel</span><select data-set-field="openIn"><option value="active" ${draft.openIn === 'active' ? 'selected' : ''}>Active panel</option><option value="left" ${draft.openIn === 'left' ? 'selected' : ''}>Left panel</option><option value="right" ${draft.openIn === 'right' ? 'selected' : ''}>Right panel</option></select></label>`}<div class="directory-set-form-actions"><button class="settings-secondary" data-cancel-set>Back</button><button class="settings-primary" data-save-set>Save directory set</button></div>`;
+    const isPair = draft.type === "pair";
+    settingsContent.innerHTML = `<h2>${draft.index === null ? "New directory set" : "Edit directory set"}</h2><p class="settings-description">Save one location or a left/right directory pair.</p><label class="directory-set-field"><span>Name <small>(optional)</small></span><input data-set-field="name" value="${escapeHtml(draft.name || "")}" placeholder="For example, Project files"></label><label class="directory-set-field"><span>Set type</span><select data-set-field="type"><option value="single" ${!isPair ? "selected" : ""}>Single directory</option><option value="pair" ${isPair ? "selected" : ""}>Directory pair</option></select></label>${isPair ? `<div class="directory-set-field"><span>Left panel directory</span><div class="directory-path-input"><input data-set-field="leftPath" value="${escapeHtml(draft.leftPath || "")}" placeholder="Choose a folder"><button data-browse-field="leftPath">Browse…</button><button data-use-panel="left" title="Use current left panel folder">Use left</button></div></div><div class="directory-set-field"><span>Right panel directory</span><div class="directory-path-input"><input data-set-field="rightPath" value="${escapeHtml(draft.rightPath || "")}" placeholder="Choose a folder"><button data-browse-field="rightPath">Browse…</button><button data-use-panel="right" title="Use current right panel folder">Use right</button></div></div><p class="settings-hint">Opening a pair places its left and right directories in their matching panels.</p>` : `<div class="directory-set-field"><span>Directory</span><div class="directory-path-input"><input data-set-field="path" value="${escapeHtml(draft.path || "")}" placeholder="Choose a folder"><button data-browse-field="path">Browse…</button><button data-use-panel="left" title="Use current left panel folder">Use left</button><button data-use-panel="right" title="Use current right panel folder">Use right</button></div></div><label class="directory-set-field"><span>Open in panel</span><select data-set-field="openIn"><option value="active" ${draft.openIn === "active" ? "selected" : ""}>Active panel</option><option value="left" ${draft.openIn === "left" ? "selected" : ""}>Left panel</option><option value="right" ${draft.openIn === "right" ? "selected" : ""}>Right panel</option></select></label>`}<div class="directory-set-form-actions"><button class="settings-secondary" data-cancel-set>Back</button><button class="settings-primary" data-save-set>Save directory set</button></div>`;
     return;
   }
-  const items = orderedDirectorySets().map(({ set, index }) => {
-    const description = set.type === 'pair'
-      ? `Left: ${set.leftPath} · Right: ${set.rightPath}`
-      : `${set.path} · Opens in ${set.openIn === 'active' ? 'active panel' : `${set.openIn} panel`}`;
-    return `<div class="directory-set-row" draggable="${preferences.directorySetSort === 'manual'}" data-sortable-set="${index}"><div class="directory-set-summary"><strong>${escapeHtml(directorySetLabel(set))}</strong><small>${escapeHtml(description)}</small></div><button class="directory-set-open" data-open-set="${index}">Open</button><button class="bookmark-remove" data-edit-set="${index}" aria-label="Edit directory set" title="Edit">✎</button><button class="bookmark-remove" data-remove-set="${index}" aria-label="Remove directory set" title="Remove">×</button></div>`;
-  }).join('');
-  settingsContent.innerHTML = `<h2>Directory Sets</h2><p class="settings-description">Save a single location or a left/right pair, then open it in your preferred panel arrangement.</p><label class="setting-field directory-set-sort-field"><span>Sort directory sets</span><select data-preference="directorySetSort"><option value="manual" ${preferences.directorySetSort === 'manual' ? 'selected' : ''}>Manual (drag to reorder)</option><option value="alphabetical" ${preferences.directorySetSort === 'alphabetical' ? 'selected' : ''}>Alphabetically by title</option></select></label><button class="settings-primary" data-new-set>New directory set</button><div class="directory-set-list">${items || '<p class="settings-empty">No directory sets yet.</p>'}</div>`;
+  const items = orderedDirectorySets()
+    .map(({ set, index }) => {
+      const description =
+        set.type === "pair"
+          ? `Left: ${set.leftPath} · Right: ${set.rightPath}`
+          : `${set.path} · Opens in ${set.openIn === "active" ? "active panel" : `${set.openIn} panel`}`;
+      return `<div class="directory-set-row" draggable="${preferences.directorySetSort === "manual"}" data-sortable-set="${index}"><div class="directory-set-summary"><strong>${escapeHtml(directorySetLabel(set))}</strong><small>${escapeHtml(description)}</small></div><button class="directory-set-open" data-open-set="${index}">Open</button><button class="bookmark-remove" data-edit-set="${index}" aria-label="Edit directory set" title="Edit">✎</button><button class="bookmark-remove" data-remove-set="${index}" aria-label="Remove directory set" title="Remove">×</button></div>`;
+    })
+    .join("");
+  settingsContent.innerHTML = `<h2>Directory Sets</h2><p class="settings-description">Save a single location or a left/right pair, then open it in your preferred panel arrangement.</p><label class="setting-field directory-set-sort-field"><span>Sort directory sets</span><select data-preference="directorySetSort"><option value="manual" ${preferences.directorySetSort === "manual" ? "selected" : ""}>Manual (drag to reorder)</option><option value="alphabetical" ${preferences.directorySetSort === "alphabetical" ? "selected" : ""}>Alphabetically by title</option></select></label><button class="settings-primary" data-new-set>New directory set</button><div class="directory-set-list">${items || '<p class="settings-empty">No directory sets yet.</p>'}</div>`;
 }
 function renderSettingsCategory() {
-  document.querySelectorAll('.settings-category').forEach((button) => button.classList.toggle('active', button.dataset.category === settingsCategory));
-  if (settingsCategory === 'files') {
-    settingsContent.innerHTML = `<h2>Files &amp; Folders</h2><p class="settings-description">Choose which items appear and how they are arranged.</p><label class="setting-option"><span><strong>Show hidden files</strong><small>Include dot-prefixed files and folders in the panels.</small></span><input type="checkbox" data-preference="showHidden" ${preferences.showHidden ? 'checked' : ''}></label><label class="setting-option"><span><strong>Group folders before files</strong><small>Keep folders at the top of each panel.</small></span><input type="checkbox" data-preference="groupFolders" ${preferences.groupFolders ? 'checked' : ''}></label><label class="setting-option"><span><strong>Confirm before deleting</strong><small>When confirmation is disabled, items are moved to the Recycle Bin without a prompt.</small></span><input type="checkbox" data-preference="confirmDelete" ${preferences.confirmDelete ? 'checked' : ''}></label>`;
-  } else if (settingsCategory === 'date-time') {
-    settingsContent.innerHTML = `<h2>Date &amp; Time</h2><p class="settings-description">Choose how modification dates and times appear in the panels.</p><label class="setting-field"><span>Date format</span><select data-preference="dateFormat"><option value="us" ${preferences.dateFormat === 'us' ? 'selected' : ''}>MM/DD/YYYY (American)</option><option value="eu" ${preferences.dateFormat === 'eu' ? 'selected' : ''}>DD/MM/YYYY (European)</option><option value="iso-dash" ${preferences.dateFormat === 'iso-dash' ? 'selected' : ''}>YYYY-MM-DD</option><option value="iso-slash" ${preferences.dateFormat === 'iso-slash' ? 'selected' : ''}>YYYY/MM/DD</option></select></label><label class="setting-field date-time-field"><span>Time format</span><select data-preference="timeFormat"><option value="12h" ${preferences.timeFormat === '12h' ? 'selected' : ''}>12-hour with AM/PM</option><option value="24h" ${preferences.timeFormat === '24h' ? 'selected' : ''}>24-hour, no leading zero</option><option value="24h-padded" ${preferences.timeFormat === '24h-padded' ? 'selected' : ''}>24-hour, leading zero</option></select></label>`;
-  } else if (settingsCategory === 'theme') {
-    settingsContent.innerHTML = `<h2>Theme</h2><p class="settings-description">Choose the appearance used by the file manager.</p><label class="setting-field"><span>Color theme</span><select data-preference="theme"><option value="system" ${preferences.theme === 'system' ? 'selected' : ''}>System</option><option value="light" ${preferences.theme === 'light' ? 'selected' : ''}>Light</option><option value="dark" ${preferences.theme === 'dark' ? 'selected' : ''}>Dark</option></select></label>`;
-  } else if (settingsCategory === 'thumbnails') {
+  document
+    .querySelectorAll(".settings-category")
+    .forEach((button) =>
+      button.classList.toggle(
+        "active",
+        button.dataset.category === settingsCategory,
+      ),
+    );
+  if (settingsCategory === "files") {
+    settingsContent.innerHTML = `<h2>Files &amp; Folders</h2><p class="settings-description">Choose which items appear and how they are arranged.</p><label class="setting-option"><span><strong>Show hidden files</strong><small>Include dot-prefixed files and folders in the panels.</small></span><input type="checkbox" data-preference="showHidden" ${preferences.showHidden ? "checked" : ""}></label><label class="setting-option"><span><strong>Group folders before files</strong><small>Keep folders at the top of each panel.</small></span><input type="checkbox" data-preference="groupFolders" ${preferences.groupFolders ? "checked" : ""}></label><label class="setting-option"><span><strong>Confirm before deleting</strong><small>When confirmation is disabled, items are moved to the Recycle Bin without a prompt.</small></span><input type="checkbox" data-preference="confirmDelete" ${preferences.confirmDelete ? "checked" : ""}></label>`;
+  } else if (settingsCategory === "date-time") {
+    settingsContent.innerHTML = `<h2>Date &amp; Time</h2><p class="settings-description">Choose how modification dates and times appear in the panels.</p><label class="setting-field"><span>Date format</span><select data-preference="dateFormat"><option value="us" ${preferences.dateFormat === "us" ? "selected" : ""}>MM/DD/YYYY (American)</option><option value="eu" ${preferences.dateFormat === "eu" ? "selected" : ""}>DD/MM/YYYY (European)</option><option value="iso-dash" ${preferences.dateFormat === "iso-dash" ? "selected" : ""}>YYYY-MM-DD</option><option value="iso-slash" ${preferences.dateFormat === "iso-slash" ? "selected" : ""}>YYYY/MM/DD</option></select></label><label class="setting-field date-time-field"><span>Time format</span><select data-preference="timeFormat"><option value="12h" ${preferences.timeFormat === "12h" ? "selected" : ""}>12-hour with AM/PM</option><option value="24h" ${preferences.timeFormat === "24h" ? "selected" : ""}>24-hour, no leading zero</option><option value="24h-padded" ${preferences.timeFormat === "24h-padded" ? "selected" : ""}>24-hour, leading zero</option></select></label>`;
+  } else if (settingsCategory === "theme") {
+    settingsContent.innerHTML = `<h2>Theme</h2><p class="settings-description">Choose the appearance used by the file manager.</p><label class="setting-field"><span>Color theme</span><select data-preference="theme"><option value="system" ${preferences.theme === "system" ? "selected" : ""}>System</option><option value="light" ${preferences.theme === "light" ? "selected" : ""}>Light</option><option value="dark" ${preferences.theme === "dark" ? "selected" : ""}>Dark</option></select></label>`;
+  } else if (settingsCategory === "thumbnails") {
     settingsContent.innerHTML = `<h2>Thumbnails</h2><p class="settings-description">Choose where generated image previews are stored, or clear the saved previews.</p><div class="thumbnail-cache-field"><label for="thumbnail-cache-path">Cache folder</label><div class="directory-path-input"><input id="thumbnail-cache-path" data-preference="thumbnailCachePath" value="${escapeHtml(preferences.thumbnailCachePath)}" placeholder="Default location"><button data-cache-browse>Browse…</button></div><p class="settings-hint">Leave blank to use the default cache folder: <span id="thumbnail-cache-default-path">Loading…</span></p></div><div class="thumbnail-cache-actions"><button class="settings-secondary" data-cache-default>Use default folder</button><button class="settings-primary" data-clear-thumbnail-cache>Clear thumbnail cache</button></div><p class="settings-hint" id="thumbnail-cache-status" role="status"></p>`;
-    window.fileManager.thumbnailCacheDefaultPath().then((directory) => {
-      defaultThumbnailCachePath = directory;
-      const label = settingsContent.querySelector('#thumbnail-cache-default-path');
-      if (label && settingsCategory === 'thumbnails') label.textContent = directory;
-    }).catch(() => {
-      const label = settingsContent.querySelector('#thumbnail-cache-default-path');
-      if (label && settingsCategory === 'thumbnails') label.textContent = 'Unavailable';
-    });
-  } else if (settingsCategory === 'directory-sets') renderDirectorySets();
+    window.fileManager
+      .thumbnailCacheDefaultPath()
+      .then((directory) => {
+        defaultThumbnailCachePath = directory;
+        const label = settingsContent.querySelector(
+          "#thumbnail-cache-default-path",
+        );
+        if (label && settingsCategory === "thumbnails")
+          label.textContent = directory;
+      })
+      .catch(() => {
+        const label = settingsContent.querySelector(
+          "#thumbnail-cache-default-path",
+        );
+        if (label && settingsCategory === "thumbnails")
+          label.textContent = "Unavailable";
+      });
+  } else if (settingsCategory === "directory-sets") renderDirectorySets();
 }
 function openSettings() {
-  settingsCategory = 'files';
+  settingsCategory = "files";
   renderSettingsCategory();
   settingsBackdrop.hidden = false;
-  document.querySelector('#settings-close').focus();
+  document.querySelector("#settings-close").focus();
 }
 function closeSettings() {
   settingsBackdrop.hidden = true;
-  document.querySelector('#settings-button').focus();
+  document.querySelector("#settings-button").focus();
 }
-function askForName({ title, label, value = '', confirmLabel }) {
-  nameDialogBackdrop.querySelector('#name-dialog-title').textContent = title;
-  nameDialogBackdrop.querySelector('#name-dialog-label').textContent = label;
+function askForName({ title, label, value = "", confirmLabel }) {
+  nameDialogBackdrop.querySelector("#name-dialog-title").textContent = title;
+  nameDialogBackdrop.querySelector("#name-dialog-label").textContent = label;
   nameDialogInput.value = value;
-  nameDialogBackdrop.querySelector('#name-dialog-submit').textContent = confirmLabel;
+  nameDialogBackdrop.querySelector("#name-dialog-submit").textContent =
+    confirmLabel;
   nameDialogBackdrop.hidden = false;
   nameDialogInput.focus();
   nameDialogInput.select();
-  return new Promise((resolve) => { resolveNameDialog = resolve; });
+  return new Promise((resolve) => {
+    resolveNameDialog = resolve;
+  });
 }
 function finishNameDialog(value) {
   if (nameDialogBackdrop.hidden) return;
@@ -1034,41 +1540,49 @@ function finishNameDialog(value) {
 }
 async function openAbout() {
   aboutBackdrop.hidden = false;
-  document.querySelector('#about-close').focus();
-  const version = aboutBackdrop.querySelector('#about-version');
-  version.textContent = 'Version…';
+  document.querySelector("#about-close").focus();
+  const version = aboutBackdrop.querySelector("#about-version");
+  version.textContent = "Version…";
   try {
     const info = await window.fileManager.versionInfo();
     if (!aboutBackdrop.hidden) version.textContent = `Version ${info.version}`;
   } catch {
-    if (!aboutBackdrop.hidden) version.textContent = 'Version unavailable';
+    if (!aboutBackdrop.hidden) version.textContent = "Version unavailable";
   }
 }
 function closeAbout() {
   aboutBackdrop.hidden = true;
-  document.querySelector('#about-button').focus();
+  document.querySelector("#about-button").focus();
 }
+
+// ============================================================================
+// 13. PANEL ACTIONS, SELECTION & FILE OPERATIONS
+// ============================================================================
 function getSelected(side) {
   const panel = panels[side];
   return panel.entries.filter((entry) => panel.selected.has(entry.path));
 }
 function refreshSelection() {
-  document.querySelectorAll('.panel').forEach((panelElement) => {
+  document.querySelectorAll(".panel").forEach((panelElement) => {
     const side = panelElement.dataset.panel;
     const panel = panels[side];
-    panelElement.classList.toggle('is-active', side === activeSide);
-    panelElement.querySelectorAll('[data-entry]').forEach((item) => {
+    panelElement.classList.toggle("is-active", side === activeSide);
+    panelElement.querySelectorAll("[data-entry]").forEach((item) => {
       const entry = panel.entries[Number(item.dataset.entry)];
-      item.classList.toggle('selected', panel.selected.has(entry.path));
+      item.classList.toggle("selected", panel.selected.has(entry.path));
     });
-    const bottom = panelElement.querySelector('.panel-bottom');
+    const bottom = panelElement.querySelector(".panel-bottom");
     if (bottom) bottom.innerHTML = panelStatus(panel);
   });
   updateSummary();
 }
 async function createFolder(side) {
   const parent = panels[side].path;
-  const name = await askForName({ title: 'New folder', label: 'Folder name', confirmLabel: 'Create folder' });
+  const name = await askForName({
+    title: "New folder",
+    label: "Folder name",
+    confirmLabel: "Create folder",
+  });
   if (name === null || !name.trim()) return;
   try {
     await window.fileManager.createFolder({ parent, name: name.trim() });
@@ -1082,45 +1596,61 @@ function bindPanel(side) {
   const panel = panels[side];
   const element = panel.element;
   bindDriveButtons(side);
-  element.querySelector('.path-home')?.addEventListener('click', () => navigate(side, undefined));
-  element.querySelector('.pathbar')?.addEventListener('click', (event) => {
+  element
+    .querySelector(".path-home")
+    ?.addEventListener("click", () => navigate(side, undefined));
+  element.querySelector(".pathbar")?.addEventListener("click", (event) => {
     if (event.target === event.currentTarget) editPanelPath(side);
   });
-  element.querySelector('[data-action="directory-sets"]')?.addEventListener('click', (event) => {
-    showDirectorySetMenu(side, event.currentTarget);
-  });
-  element.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
-    const view = button.dataset.view;
-    if (panel.view === view) return;
-    panel.view = view;
-    activeSide = side;
-    renderPanel(side);
-    persistPanelViews();
-    persistLayout();
-  }));
+  element
+    .querySelector('[data-action="directory-sets"]')
+    ?.addEventListener("click", (event) => {
+      showDirectorySetMenu(side, event.currentTarget);
+    });
+  element.querySelectorAll("[data-view]").forEach((button) =>
+    button.addEventListener("click", () => {
+      const view = button.dataset.view;
+      if (panel.view === view) return;
+      panel.view = view;
+      activeSide = side;
+      renderPanel(side);
+      persistPanelViews();
+      persistLayout();
+    }),
+  );
   const sizeSlider = element.querySelector('[data-action="icon-size"]');
-  sizeSlider?.addEventListener('input', () => {
+  sizeSlider?.addEventListener("input", () => {
     panel.iconSize = Number(sizeSlider.value);
-    element.querySelector('[data-size-value]').textContent = String(panel.iconSize);
+    element.querySelector("[data-size-value]").textContent = String(
+      panel.iconSize,
+    );
     applyThumbnailSize(panel);
     persistPanelViews();
     persistLayout();
   });
-  element.querySelectorAll('[data-crumb]').forEach((crumb) => crumb.addEventListener('click', () => {
-    const part = pathParts(panel.path)[Number(crumb.dataset.crumb)];
-    if (part) navigate(side, part.path);
-  }));
-  element.querySelectorAll('[data-sort]').forEach((heading) => heading.addEventListener('click', () => {
-    const column = heading.dataset.sort;
-    if (panel.sortBy === column) panel.sortDirection = panel.sortDirection === 'asc' ? 'desc' : 'asc';
-    else { panel.sortBy = column; panel.sortDirection = 'asc'; }
-    renderPanel(side);
-  }));
-  element.querySelectorAll('[data-column-boundary]').forEach((grip) => {
+  element.querySelectorAll("[data-crumb]").forEach((crumb) =>
+    crumb.addEventListener("click", () => {
+      const part = pathParts(panel.path)[Number(crumb.dataset.crumb)];
+      if (part) navigate(side, part.path);
+    }),
+  );
+  element.querySelectorAll("[data-sort]").forEach((heading) =>
+    heading.addEventListener("click", () => {
+      const column = heading.dataset.sort;
+      if (panel.sortBy === column)
+        panel.sortDirection = panel.sortDirection === "asc" ? "desc" : "asc";
+      else {
+        panel.sortBy = column;
+        panel.sortDirection = "asc";
+      }
+      renderPanel(side);
+    }),
+  );
+  element.querySelectorAll("[data-column-boundary]").forEach((grip) => {
     let startX = 0;
     let startWidths = null;
     const boundary = Number(grip.dataset.columnBoundary);
-    grip.addEventListener('pointerdown', (event) => {
+    grip.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
       event.preventDefault();
       event.stopPropagation();
@@ -1128,220 +1658,338 @@ function bindPanel(side) {
       refreshSelection();
       startX = event.clientX;
       startWidths = [...panel.columns];
-      grip.classList.add('is-dragging');
+      grip.classList.add("is-dragging");
       grip.setPointerCapture(event.pointerId);
     });
-    grip.addEventListener('pointermove', (event) => {
+    grip.addEventListener("pointermove", (event) => {
       if (!startWidths || !grip.hasPointerCapture(event.pointerId)) return;
-      const tableWidth = grip.closest('table').getBoundingClientRect().width;
-      const delta = (event.clientX - startX) / tableWidth * 100;
+      const tableWidth = grip.closest("table").getBoundingClientRect().width;
+      const delta = ((event.clientX - startX) / tableWidth) * 100;
       const leftColumn = boundary;
       const rightColumn = boundary + 1;
       const leftMin = leftColumn === 0 ? 25 : 10;
       const rightMin = rightColumn === 2 ? 15 : 10;
-      const leftWidth = Math.max(leftMin, Math.min(startWidths[leftColumn] + startWidths[rightColumn] - rightMin, startWidths[leftColumn] + delta));
+      const leftWidth = Math.max(
+        leftMin,
+        Math.min(
+          startWidths[leftColumn] + startWidths[rightColumn] - rightMin,
+          startWidths[leftColumn] + delta,
+        ),
+      );
       panel.columns[leftColumn] = leftWidth;
-      panel.columns[rightColumn] = startWidths[leftColumn] + startWidths[rightColumn] - leftWidth;
-      const table = grip.closest('table');
-      table.style.setProperty('--name-width', `${panel.columns[0]}%`);
-      table.style.setProperty('--size-width', `${panel.columns[1]}%`);
-      table.style.setProperty('--date-width', `${panel.columns[2]}%`);
-      table.querySelectorAll('col').forEach((col, index) => { col.style.width = `${panel.columns[index]}%`; });
+      panel.columns[rightColumn] =
+        startWidths[leftColumn] + startWidths[rightColumn] - leftWidth;
+      const table = grip.closest("table");
+      table.style.setProperty("--name-width", `${panel.columns[0]}%`);
+      table.style.setProperty("--size-width", `${panel.columns[1]}%`);
+      table.style.setProperty("--date-width", `${panel.columns[2]}%`);
+      table.querySelectorAll("col").forEach((col, index) => {
+        col.style.width = `${panel.columns[index]}%`;
+      });
     });
     const finishResize = (event) => {
       if (!startWidths) return;
       startWidths = null;
-      grip.classList.remove('is-dragging');
-      if (grip.hasPointerCapture(event.pointerId)) grip.releasePointerCapture(event.pointerId);
+      grip.classList.remove("is-dragging");
+      if (grip.hasPointerCapture(event.pointerId))
+        grip.releasePointerCapture(event.pointerId);
       persistLayout();
     };
-    grip.addEventListener('pointerup', finishResize);
-    grip.addEventListener('pointercancel', finishResize);
+    grip.addEventListener("pointerup", finishResize);
+    grip.addEventListener("pointercancel", finishResize);
   });
-  element.querySelectorAll('[data-action="up"]').forEach((button) => button.addEventListener('click', () => navigate(side, pathParts(panel.path).length > 1 ? pathParts(panel.path).at(-2).path : panel.path)));
-  element.querySelectorAll('[data-action="refresh"]').forEach((button) => button.addEventListener('click', () => {
-    navigate(side, panel.path);
-    refreshDetectedDrives();
-  }));
-  element.querySelector('[data-action="match-other"]')?.addEventListener('click', () => {
-    const otherSide = side === 'left' ? 'right' : 'left';
-    if (panels[otherSide].path) navigate(side, panels[otherSide].path);
-  });
-  element.querySelectorAll('[data-entry]').forEach((row) => {
+  element
+    .querySelectorAll('[data-action="up"]')
+    .forEach((button) =>
+      button.addEventListener("click", () =>
+        navigate(
+          side,
+          pathParts(panel.path).length > 1
+            ? pathParts(panel.path).at(-2).path
+            : panel.path,
+        ),
+      ),
+    );
+  element.querySelectorAll('[data-action="refresh"]').forEach((button) =>
+    button.addEventListener("click", () => {
+      navigate(side, panel.path);
+      refreshDetectedDrives();
+    }),
+  );
+  element
+    .querySelector('[data-action="match-other"]')
+    ?.addEventListener("click", () => {
+      const otherSide = side === "left" ? "right" : "left";
+      if (panels[otherSide].path) navigate(side, panels[otherSide].path);
+    });
+  element.querySelectorAll("[data-entry]").forEach((row) => {
     const entry = panel.entries[Number(row.dataset.entry)];
-    row.addEventListener('click', (event) => {
+    row.addEventListener("click", (event) => {
       activeSide = side;
       if (event.ctrlKey || event.metaKey) {
-        panel.selected.has(entry.path) ? panel.selected.delete(entry.path) : panel.selected.add(entry.path);
+        panel.selected.has(entry.path)
+          ? panel.selected.delete(entry.path)
+          : panel.selected.add(entry.path);
       } else if (event.shiftKey) {
-        const indices = [...panel.selected].map((selected) => panel.entries.findIndex((candidate) => candidate.path === selected)).filter((n) => n >= 0);
-        const start = indices.length ? Math.min(...indices) : Number(row.dataset.entry);
+        const indices = [...panel.selected]
+          .map((selected) =>
+            panel.entries.findIndex((candidate) => candidate.path === selected),
+          )
+          .filter((n) => n >= 0);
+        const start = indices.length
+          ? Math.min(...indices)
+          : Number(row.dataset.entry);
         const end = Number(row.dataset.entry);
         panel.selected.clear();
-        panel.entries.slice(Math.min(start, end), Math.max(start, end) + 1).forEach((item) => panel.selected.add(item.path));
+        panel.entries
+          .slice(Math.min(start, end), Math.max(start, end) + 1)
+          .forEach((item) => panel.selected.add(item.path));
       } else if (!panel.selected.has(entry.path) || panel.selected.size > 1) {
-        panel.selected.clear(); panel.selected.add(entry.path);
+        panel.selected.clear();
+        panel.selected.add(entry.path);
       }
       refreshSelection();
     });
-    row.addEventListener('dblclick', async () => {
+    row.addEventListener("dblclick", async () => {
       const result = await window.fileManager.open(entry.path);
       if (result.navigateTo) navigate(side, result.navigateTo);
       else if (result.error) toast(result.error);
     });
-    row.addEventListener('contextmenu', (event) => {
+    row.addEventListener("contextmenu", (event) => {
       event.preventDefault();
-      if (rightDragCandidate?.dragging || Date.now() < suppressRightContextUntil) return;
+      if (
+        rightDragCandidate?.dragging ||
+        Date.now() < suppressRightContextUntil
+      )
+        return;
       activeSide = side;
-      if (!panel.selected.has(entry.path)) { panel.selected.clear(); panel.selected.add(entry.path); }
+      if (!panel.selected.has(entry.path)) {
+        panel.selected.clear();
+        panel.selected.add(entry.path);
+      }
       refreshSelection();
       showContextMenu(event.clientX, event.clientY, side, entry);
     });
-    row.addEventListener('dragstart', (event) => {
+    row.addEventListener("dragstart", (event) => {
       activeSide = side;
-      if (!panel.selected.has(entry.path)) { panel.selected.clear(); panel.selected.add(entry.path); }
+      if (!panel.selected.has(entry.path)) {
+        panel.selected.clear();
+        panel.selected.add(entry.path);
+      }
       const paths = getSelected(side).map((item) => item.path);
-      event.dataTransfer.setData('application/x-koa-files', JSON.stringify({ side, paths }));
-      event.dataTransfer.effectAllowed = 'copyMove';
+      event.dataTransfer.setData(
+        "application/x-koa-files",
+        JSON.stringify({ side, paths }),
+      );
+      event.dataTransfer.effectAllowed = "copyMove";
       setTimeout(refreshSelection, 0);
     });
-    row.addEventListener('dragover', (event) => { event.preventDefault(); row.classList.add('drop-target'); });
-    row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
-    row.addEventListener('drop', async (event) => {
-      event.preventDefault(); row.classList.remove('drop-target');
-      await handleDrop(event, side, entry.isDirectory ? entry.path : panel.path);
+    row.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      row.classList.add("drop-target");
+    });
+    row.addEventListener("dragleave", () =>
+      row.classList.remove("drop-target"),
+    );
+    row.addEventListener("drop", async (event) => {
+      event.preventDefault();
+      row.classList.remove("drop-target");
+      await handleDrop(
+        event,
+        side,
+        entry.isDirectory ? entry.path : panel.path,
+      );
     });
   });
-  element.querySelector('.file-area')?.addEventListener('dragover', (event) => event.preventDefault());
-  element.querySelector('.file-area')?.addEventListener('contextmenu', (event) => {
-    if (event.target.closest('[data-entry]')) return;
-    event.preventDefault();
-    activeSide = side;
-    panels.left.element.classList.toggle('is-active', side === 'left');
-    panels.right.element.classList.toggle('is-active', side === 'right');
-    updateSummary();
-    showBackgroundContextMenu(event.clientX, event.clientY, side);
-  });
-  element.querySelector('.file-area')?.addEventListener('drop', async (event) => {
-    if (event.target.closest('[data-entry]')) return;
-    event.preventDefault(); await handleDrop(event, side, panel.path);
-  });
+  element
+    .querySelector(".file-area")
+    ?.addEventListener("dragover", (event) => event.preventDefault());
+  element
+    .querySelector(".file-area")
+    ?.addEventListener("contextmenu", (event) => {
+      if (event.target.closest("[data-entry]")) return;
+      event.preventDefault();
+      activeSide = side;
+      panels.left.element.classList.toggle("is-active", side === "left");
+      panels.right.element.classList.toggle("is-active", side === "right");
+      updateSummary();
+      showBackgroundContextMenu(event.clientX, event.clientY, side);
+    });
+  element
+    .querySelector(".file-area")
+    ?.addEventListener("drop", async (event) => {
+      if (event.target.closest("[data-entry]")) return;
+      event.preventDefault();
+      await handleDrop(event, side, panel.path);
+    });
 }
+
+// ============================================================================
+// 14. CONTEXT MENUS & CLIPBOARD OPERATIONS
+// ============================================================================
 function showContextMenu(x, y, side, entry) {
-  const openAction = ['Open', 'Enter', () => window.fileManager.open(entry.path).then((result) => result.navigateTo && navigate(side, result.navigateTo))];
+  const openAction = [
+    "Open",
+    "Enter",
+    () =>
+      window.fileManager
+        .open(entry.path)
+        .then(
+          (result) => result.navigateTo && navigate(side, result.navigateTo),
+        ),
+  ];
   const actions = [
     openAction,
-    ['Copy', 'Ctrl+C', () => copySelection(side, false)],
-    ['Cut', 'Ctrl+X', () => copySelection(side, true)],
-    ['Paste', 'Ctrl+V', () => pasteSelection()],
-    ['Rename', '', () => renameSelection(side)],
-    ['Delete', 'Delete', () => deleteSelection(side)]
+    ["Copy", "Ctrl+C", () => copySelection(side, false)],
+    ["Cut", "Ctrl+X", () => copySelection(side, true)],
+    ["Paste", "Ctrl+V", () => pasteSelection()],
+    ["Rename", "", () => renameSelection(side)],
+    ["Delete", "Delete", () => deleteSelection(side)],
   ];
   if (entry.isDirectory) {
-    actions.push(['Open in File Explorer', '', () => window.fileManager.openInFileManager(entry.path)]);
+    actions.push([
+      "Open in File Explorer",
+      "",
+      () => window.fileManager.openInFileManager(entry.path),
+    ]);
   }
-  actions.push(['Properties', '', async () => {
-    try {
-      showProperties(await window.fileManager.properties(entry.path));
-    } catch (error) {
-      toast(`Could not open Properties: ${error.message}`);
-    }
-  }]);
-  const separators = new Set([1, 5, actions.length - 1]);
-  if (entry.isDirectory) separators.add(actions.length - 2);
-  menu.innerHTML = actions.map(([label, shortcut], index) => `${separators.has(index) ? '<div class="menu-separator"></div>' : ''}<button role="menuitem" data-menu-index="${index}">${label}<kbd>${shortcut}</kbd></button>`).join('');
-  menu.hidden = false;
-  menu.style.left = `${Math.min(x, innerWidth - 218)}px`;
-  menu.style.top = `${Math.min(y, innerHeight - 220)}px`;
-  menu.querySelectorAll('[data-menu-index]').forEach((button) => button.addEventListener('click', () => {
-    menu.hidden = true;
-    const index = Number(button.dataset.menuIndex);
-    actions[index][2]();
-  }));
-  document.addEventListener('mousedown', hideMenu, { once: true });
-}
-function showBackgroundContextMenu(x, y, side) {
-  menu.innerHTML = '<div class="context-menu-item context-submenu-parent"><button role="menuitem" data-open-new-submenu aria-haspopup="true" aria-expanded="false">New<span aria-hidden="true">›</span></button><div class="context-submenu" hidden><button role="menuitem" data-background-action="folder">Folder</button><button role="menuitem" data-background-action="shortcut">Shortcut</button></div></div><div class="menu-separator"></div><button role="menuitem" data-background-action="properties">Properties</button><button role="menuitem" data-background-action="explorer">Open in File Explorer</button>';
-  menu.hidden = false;
-  menu.style.left = `${Math.max(8, Math.min(x, innerWidth - 218))}px`;
-  menu.style.top = `${Math.max(8, Math.min(y, innerHeight - 150))}px`;
-  const submenuParent = menu.querySelector('.context-submenu-parent');
-  const submenuButton = menu.querySelector('[data-open-new-submenu]');
-  const submenu = menu.querySelector('.context-submenu');
-  const showSubmenu = () => {
-    submenu.hidden = false;
-    submenuButton.setAttribute('aria-expanded', 'true');
-    const rect = menu.getBoundingClientRect();
-    submenuParent.classList.toggle('opens-left', rect.right + 180 > innerWidth);
-  };
-  const hideSubmenu = () => {
-    submenu.hidden = true;
-    submenuButton.setAttribute('aria-expanded', 'false');
-  };
-  submenuParent.addEventListener('mouseenter', showSubmenu);
-  submenuParent.addEventListener('mouseleave', hideSubmenu);
-  submenuButton.addEventListener('focus', showSubmenu);
-  submenuButton.addEventListener('click', showSubmenu);
-  const dismissBackgroundMenu = (event) => {
-    if (menu.contains(event.target)) return;
-    menu.hidden = true;
-    document.removeEventListener('mousedown', dismissBackgroundMenu);
-  };
-  document.addEventListener('mousedown', dismissBackgroundMenu);
-  menu.querySelectorAll('[data-background-action]').forEach((button) => button.addEventListener('click', async () => {
-    const action = button.dataset.backgroundAction;
-    menu.hidden = true;
-    document.removeEventListener('mousedown', dismissBackgroundMenu);
-    if (action === 'folder') {
-      await createFolder(side);
-    } else if (action === 'shortcut') {
+  actions.push([
+    "Properties",
+    "",
+    async () => {
       try {
-        const result = await window.fileManager.createShortcutWizard(panels[side].path);
-        await navigate(side, panels[side].path);
-        if (result.created) toast('Shortcut created');
-      } catch (error) {
-        toast(error.message);
-      }
-    } else if (action === 'properties') {
-      try {
-        showProperties(await window.fileManager.properties(panels[side].path));
+        showProperties(await window.fileManager.properties(entry.path));
       } catch (error) {
         toast(`Could not open Properties: ${error.message}`);
       }
-    } else if (action === 'explorer') {
-      const result = await window.fileManager.openInFileManager(panels[side].path);
-      if (result?.error) toast(result.error);
-    }
-  }));
+    },
+  ]);
+  const separators = new Set([1, 5, actions.length - 1]);
+  if (entry.isDirectory) separators.add(actions.length - 2);
+  menu.innerHTML = actions
+    .map(
+      ([label, shortcut], index) =>
+        `${separators.has(index) ? '<div class="menu-separator"></div>' : ""}<button role="menuitem" data-menu-index="${index}">${label}<kbd>${shortcut}</kbd></button>`,
+    )
+    .join("");
+  menu.hidden = false;
+  menu.style.left = `${Math.min(x, innerWidth - 218)}px`;
+  menu.style.top = `${Math.min(y, innerHeight - 220)}px`;
+  menu.querySelectorAll("[data-menu-index]").forEach((button) =>
+    button.addEventListener("click", () => {
+      menu.hidden = true;
+      const index = Number(button.dataset.menuIndex);
+      actions[index][2]();
+    }),
+  );
+  document.addEventListener("mousedown", hideMenu, { once: true });
 }
-function hideMenu(event) { if (!menu.contains(event.target)) menu.hidden = true; }
+function showBackgroundContextMenu(x, y, side) {
+  menu.innerHTML =
+    '<div class="context-menu-item context-submenu-parent"><button role="menuitem" data-open-new-submenu aria-haspopup="true" aria-expanded="false">New<span aria-hidden="true">›</span></button><div class="context-submenu" hidden><button role="menuitem" data-background-action="folder">Folder</button><button role="menuitem" data-background-action="shortcut">Shortcut</button></div></div><div class="menu-separator"></div><button role="menuitem" data-background-action="properties">Properties</button><button role="menuitem" data-background-action="explorer">Open in File Explorer</button>';
+  menu.hidden = false;
+  menu.style.left = `${Math.max(8, Math.min(x, innerWidth - 218))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, innerHeight - 150))}px`;
+  const submenuParent = menu.querySelector(".context-submenu-parent");
+  const submenuButton = menu.querySelector("[data-open-new-submenu]");
+  const submenu = menu.querySelector(".context-submenu");
+  const showSubmenu = () => {
+    submenu.hidden = false;
+    submenuButton.setAttribute("aria-expanded", "true");
+    const rect = menu.getBoundingClientRect();
+    submenuParent.classList.toggle("opens-left", rect.right + 180 > innerWidth);
+  };
+  const hideSubmenu = () => {
+    submenu.hidden = true;
+    submenuButton.setAttribute("aria-expanded", "false");
+  };
+  submenuParent.addEventListener("mouseenter", showSubmenu);
+  submenuParent.addEventListener("mouseleave", hideSubmenu);
+  submenuButton.addEventListener("focus", showSubmenu);
+  submenuButton.addEventListener("click", showSubmenu);
+  const dismissBackgroundMenu = (event) => {
+    if (menu.contains(event.target)) return;
+    menu.hidden = true;
+    document.removeEventListener("mousedown", dismissBackgroundMenu);
+  };
+  document.addEventListener("mousedown", dismissBackgroundMenu);
+  menu.querySelectorAll("[data-background-action]").forEach((button) =>
+    button.addEventListener("click", async () => {
+      const action = button.dataset.backgroundAction;
+      menu.hidden = true;
+      document.removeEventListener("mousedown", dismissBackgroundMenu);
+      if (action === "folder") {
+        await createFolder(side);
+      } else if (action === "shortcut") {
+        try {
+          const result = await window.fileManager.createShortcutWizard(
+            panels[side].path,
+          );
+          await navigate(side, panels[side].path);
+          if (result.created) toast("Shortcut created");
+        } catch (error) {
+          toast(error.message);
+        }
+      } else if (action === "properties") {
+        try {
+          showProperties(
+            await window.fileManager.properties(panels[side].path),
+          );
+        } catch (error) {
+          toast(`Could not open Properties: ${error.message}`);
+        }
+      } else if (action === "explorer") {
+        const result = await window.fileManager.openInFileManager(
+          panels[side].path,
+        );
+        if (result?.error) toast(result.error);
+      }
+    }),
+  );
+}
+function hideMenu(event) {
+  if (!menu.contains(event.target)) menu.hidden = true;
+}
 
 function copySelection(side, cut) {
   const items = getSelected(side);
   if (!items.length) return;
-  clipboard = { paths: items.map((item) => item.path), operation: cut ? 'move' : 'copy' };
-  setStatus(`${cut ? 'Cut' : 'Copied'} ${items.length} item${items.length === 1 ? '' : 's'}`);
-  toast(`${cut ? 'Cut' : 'Copied'} ${items.length} item${items.length === 1 ? '' : 's'}`);
+  clipboard = {
+    paths: items.map((item) => item.path),
+    operation: cut ? "move" : "copy",
+  };
+  setStatus(
+    `${cut ? "Cut" : "Copied"} ${items.length} item${items.length === 1 ? "" : "s"}`,
+  );
+  toast(
+    `${cut ? "Cut" : "Copied"} ${items.length} item${items.length === 1 ? "" : "s"}`,
+  );
 }
 async function transferWithConflicts({ sources, destination, operation }) {
   const results = [];
   for (const source of sources) {
-    let [result] = await window.fileManager.transfer({ sources: [source], destination, operation });
+    let [result] = await window.fileManager.transfer({
+      sources: [source],
+      destination,
+      operation,
+    });
     while (result?.conflict) {
       const decision = await askTransferConflict(result);
-      if (decision.choice === 'cancel') {
+      if (decision.choice === "cancel") {
         results.push({ source, ok: false, cancelled: true });
         return results;
       }
-      if (decision.choice === 'skip') {
+      if (decision.choice === "skip") {
         results.push({ source, ok: false, skipped: true });
         result = null;
         break;
       }
       [result] = await window.fileManager.transfer({
-        sources: [source], destination, operation,
+        sources: [source],
+        destination,
+        operation,
         conflictAction: decision.choice,
-        renameTo: decision.name
+        renameTo: decision.name,
       });
     }
     if (result) results.push(result);
@@ -1351,80 +1999,166 @@ async function transferWithConflicts({ sources, destination, operation }) {
 async function pasteSelection() {
   if (!clipboard?.paths.length) return;
   const operation = clipboard.operation;
-  const result = await transferWithConflicts({ sources: clipboard.paths, destination: panels[activeSide].path, operation });
+  const result = await transferWithConflicts({
+    sources: clipboard.paths,
+    destination: panels[activeSide].path,
+    operation,
+  });
   const succeeded = result.filter((item) => item.ok).length;
-  const failed = result.find((item) => !item.ok && !item.cancelled && !item.skipped);
+  const failed = result.find(
+    (item) => !item.ok && !item.cancelled && !item.skipped,
+  );
   const cancelled = result.some((item) => item.cancelled);
   const skipped = result.filter((item) => item.skipped).length;
-  if (operation === 'move' && !failed && !cancelled && succeeded === clipboard.paths.length) clipboard = null;
-  await Promise.all([navigate('left', panels.left.path), navigate('right', panels.right.path)]);
+  if (
+    operation === "move" &&
+    !failed &&
+    !cancelled &&
+    succeeded === clipboard.paths.length
+  )
+    clipboard = null;
+  await Promise.all([
+    navigate("left", panels.left.path),
+    navigate("right", panels.right.path),
+  ]);
   if (failed) toast(failed.error);
-  else if (cancelled) toast(succeeded ? `${operation === 'move' ? 'Moved' : 'Copied'} ${succeeded} item${succeeded === 1 ? '' : 's'}; remaining items skipped` : 'Transfer cancelled');
-  else if (skipped && succeeded) toast(`${operation === 'move' ? 'Moved' : 'Copied'} ${succeeded} item${succeeded === 1 ? '' : 's'}; skipped ${skipped} existing item${skipped === 1 ? '' : 's'}`);
-  else if (skipped) toast(`Skipped ${skipped} existing item${skipped === 1 ? '' : 's'}`);
-  else toast(`${operation === 'move' ? 'Moved' : 'Copied'} ${succeeded} item${succeeded === 1 ? '' : 's'}`);
+  else if (cancelled)
+    toast(
+      succeeded
+        ? `${operation === "move" ? "Moved" : "Copied"} ${succeeded} item${succeeded === 1 ? "" : "s"}; remaining items skipped`
+        : "Transfer cancelled",
+    );
+  else if (skipped && succeeded)
+    toast(
+      `${operation === "move" ? "Moved" : "Copied"} ${succeeded} item${succeeded === 1 ? "" : "s"}; skipped ${skipped} existing item${skipped === 1 ? "" : "s"}`,
+    );
+  else if (skipped)
+    toast(`Skipped ${skipped} existing item${skipped === 1 ? "" : "s"}`);
+  else
+    toast(
+      `${operation === "move" ? "Moved" : "Copied"} ${succeeded} item${succeeded === 1 ? "" : "s"}`,
+    );
 }
 async function deleteSelection(side) {
   const items = getSelected(side);
   if (!items.length) return;
-  const outcome = await window.fileManager.delete({ entries: items.map((item) => item.path), confirm: preferences.confirmDelete });
+  const outcome = await window.fileManager.delete({
+    entries: items.map((item) => item.path),
+    confirm: preferences.confirmDelete,
+  });
   if (outcome.cancelled) return;
   const failed = outcome.results.find((item) => !item.ok);
   const succeeded = outcome.results.filter((item) => item.ok).length;
   await navigate(side, panels[side].path);
   if (failed) toast(failed.error);
-  else if (outcome.permanent) toast(`Permanently deleted ${succeeded} item${succeeded === 1 ? '' : 's'}`);
-  else toast(`Moved ${succeeded} item${succeeded === 1 ? '' : 's'} to the Recycle Bin`);
-}async function renameSelection(side) {
+  else if (outcome.permanent)
+    toast(`Permanently deleted ${succeeded} item${succeeded === 1 ? "" : "s"}`);
+  else
+    toast(
+      `Moved ${succeeded} item${succeeded === 1 ? "" : "s"} to the Recycle Bin`,
+    );
+}
+async function renameSelection(side) {
   const selected = getSelected(side);
-  if (!selected.length) { toast('Select one item to rename'); return; }
-  if (selected.length > 1) { toast('Rename one item at a time'); return; }
+  if (!selected.length) {
+    toast("Select one item to rename");
+    return;
+  }
+  if (selected.length > 1) {
+    toast("Rename one item at a time");
+    return;
+  }
   const item = selected[0];
-  const name = await askForName({ title: 'Rename item', label: 'New name', value: item.name, confirmLabel: 'Rename' });
+  const name = await askForName({
+    title: "Rename item",
+    label: "New name",
+    value: item.name,
+    confirmLabel: "Rename",
+  });
   if (name === null || !name.trim() || name.trim() === item.name) return;
   try {
     await window.fileManager.rename({ source: item.path, name: name.trim() });
     await navigate(side, panels[side].path);
-    toast('Item renamed');
+    toast("Item renamed");
   } catch (error) {
     toast(error.message);
   }
 }
 async function handleDrop(event, destinationSide, destination) {
   let payload;
-  try { payload = JSON.parse(event.dataTransfer.getData('application/x-koa-files')); } catch { return; }
-  const operation = event.ctrlKey ? 'copy' : 'move';
-  const result = await transferWithConflicts({ sources: payload.paths, destination, operation });
-  const failed = result.find((item) => !item.ok && !item.cancelled && !item.skipped);
+  try {
+    payload = JSON.parse(event.dataTransfer.getData("application/x-koa-files"));
+  } catch {
+    return;
+  }
+  const operation = event.ctrlKey ? "copy" : "move";
+  const result = await transferWithConflicts({
+    sources: payload.paths,
+    destination,
+    operation,
+  });
+  const failed = result.find(
+    (item) => !item.ok && !item.cancelled && !item.skipped,
+  );
   const cancelled = result.some((item) => item.cancelled);
-  await Promise.all([navigate('left', panels.left.path), navigate('right', panels.right.path)]);
+  await Promise.all([
+    navigate("left", panels.left.path),
+    navigate("right", panels.right.path),
+  ]);
   const succeeded = result.filter((item) => item.ok).length;
   const skipped = result.filter((item) => item.skipped).length;
   if (failed) toast(failed.error);
-  else if (cancelled) toast(succeeded ? `${operation === 'copy' ? 'Copied' : 'Moved'} ${succeeded} item${succeeded === 1 ? '' : 's'}; remaining items skipped` : 'Transfer cancelled');
-  else if (skipped && succeeded) toast(`${operation === 'copy' ? 'Copied' : 'Moved'} ${succeeded} item${succeeded === 1 ? '' : 's'}; skipped ${skipped} existing item${skipped === 1 ? '' : 's'}`);
-  else if (skipped) toast(`Skipped ${skipped} existing item${skipped === 1 ? '' : 's'}`);
-  else toast(`${operation === 'copy' ? 'Copied' : 'Moved'} ${succeeded} item${succeeded === 1 ? '' : 's'}`);
+  else if (cancelled)
+    toast(
+      succeeded
+        ? `${operation === "copy" ? "Copied" : "Moved"} ${succeeded} item${succeeded === 1 ? "" : "s"}; remaining items skipped`
+        : "Transfer cancelled",
+    );
+  else if (skipped && succeeded)
+    toast(
+      `${operation === "copy" ? "Copied" : "Moved"} ${succeeded} item${succeeded === 1 ? "" : "s"}; skipped ${skipped} existing item${skipped === 1 ? "" : "s"}`,
+    );
+  else if (skipped)
+    toast(`Skipped ${skipped} existing item${skipped === 1 ? "" : "s"}`);
+  else
+    toast(
+      `${operation === "copy" ? "Copied" : "Moved"} ${succeeded} item${succeeded === 1 ? "" : "s"}`,
+    );
 }
 
+// ============================================================================
+// 15. DRAG & DROP BETWEEN PANELS
+// ============================================================================
 function clearRightDropTargets() {
-  document.querySelectorAll('.panel.right-drop-target,.panel [data-entry].right-drop-target').forEach((element) => element.classList.remove('right-drop-target'));
+  document
+    .querySelectorAll(
+      ".panel.right-drop-target,.panel [data-entry].right-drop-target",
+    )
+    .forEach((element) => element.classList.remove("right-drop-target"));
 }
 function updateRightDropTarget(x, y) {
   clearRightDropTargets();
   const underPointer = document.elementFromPoint(x, y);
-  const targetPanel = underPointer?.closest('.panel');
+  const targetPanel = underPointer?.closest(".panel");
   if (!targetPanel || targetPanel.dataset.panel === rightDragCandidate.side) {
     rightDragCandidate.destination = null;
     return;
   }
   const side = targetPanel.dataset.panel;
-  const row = underPointer.closest('[data-entry]');
-  const targetEntry = row ? panels[side].entries[Number(row.dataset.entry)] : null;
-  const destination = targetEntry?.isDirectory ? targetEntry.path : panels[side].path;
-  rightDragCandidate.destination = destination ? { side, path: destination } : null;
+  const row = underPointer.closest("[data-entry]");
+  const targetEntry = row
+    ? panels[side].entries[Number(row.dataset.entry)]
+    : null;
+  const destination = targetEntry?.isDirectory
+    ? targetEntry.path
+    : panels[side].path;
+  rightDragCandidate.destination = destination
+    ? { side, path: destination }
+    : null;
   if (rightDragCandidate.destination) {
-    (targetEntry?.isDirectory ? row : targetPanel).classList.add('right-drop-target');
+    (targetEntry?.isDirectory ? row : targetPanel).classList.add(
+      "right-drop-target",
+    );
   }
 }
 function openDropActionMenu(paths, destination, x, y) {
@@ -1435,10 +2169,10 @@ function openDropActionMenu(paths, destination, x, y) {
   dropActionMenu.style.left = `${Math.max(6, Math.min(x, innerWidth - width - 6))}px`;
   dropActionMenu.style.top = `${Math.max(6, Math.min(y, innerHeight - height - 6))}px`;
 }
-document.addEventListener('pointerdown', (event) => {
+document.addEventListener("pointerdown", (event) => {
   if (event.button !== 2) return;
-  const row = event.target.closest('[data-entry]');
-  const panelElement = row?.closest('.panel');
+  const row = event.target.closest("[data-entry]");
+  const panelElement = row?.closest(".panel");
   if (!row || !panelElement) return;
   const side = panelElement.dataset.panel;
   const entry = panels[side].entries[Number(row.dataset.entry)];
@@ -1448,141 +2182,204 @@ document.addEventListener('pointerdown', (event) => {
     pointerId: event.pointerId,
     side,
     entry,
-    paths: panel.selected.has(entry.path) ? getSelected(side).map((item) => item.path) : [entry.path],
+    paths: panel.selected.has(entry.path)
+      ? getSelected(side).map((item) => item.path)
+      : [entry.path],
     startX: event.clientX,
     startY: event.clientY,
     dragging: false,
-    destination: null
+    destination: null,
   };
 });
-document.addEventListener('pointermove', (event) => {
+document.addEventListener("pointermove", (event) => {
   const drag = rightDragCandidate;
   if (!drag || drag.pointerId !== event.pointerId) return;
-  if (!drag.dragging && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 6) {
+  if (
+    !drag.dragging &&
+    Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 6
+  ) {
     drag.dragging = true;
-    document.body.classList.add('right-dragging');
+    document.body.classList.add("right-dragging");
     activeSide = drag.side;
     const panel = panels[drag.side];
-    if (!panel.selected.has(drag.entry.path)) { panel.selected.clear(); panel.selected.add(drag.entry.path); }
+    if (!panel.selected.has(drag.entry.path)) {
+      panel.selected.clear();
+      panel.selected.add(drag.entry.path);
+    }
     refreshSelection();
   }
   if (!drag.dragging) return;
   event.preventDefault();
   updateRightDropTarget(event.clientX, event.clientY);
 });
-window.addEventListener('pointerup', (event) => {
+window.addEventListener("pointerup", (event) => {
   const drag = rightDragCandidate;
   if (!drag || drag.pointerId !== event.pointerId) return;
   rightDragCandidate = null;
   if (!drag.dragging) return;
-  document.body.classList.remove('right-dragging');
+  document.body.classList.remove("right-dragging");
   event.preventDefault();
   clearRightDropTargets();
   suppressRightContextUntil = Date.now() + 700;
-  if (drag.destination) openDropActionMenu(drag.paths, drag.destination, event.clientX, event.clientY);
-  else toast('Drop on the other panel to choose an action');
+  if (drag.destination)
+    openDropActionMenu(
+      drag.paths,
+      drag.destination,
+      event.clientX,
+      event.clientY,
+    );
+  else toast("Drop on the other panel to choose an action");
 });
-window.addEventListener('pointercancel', (event) => {
+window.addEventListener("pointercancel", (event) => {
   if (rightDragCandidate?.pointerId !== event.pointerId) return;
   rightDragCandidate = null;
-  document.body.classList.remove('right-dragging');
+  document.body.classList.remove("right-dragging");
   clearRightDropTargets();
 });
-document.addEventListener('contextmenu', (event) => {
+document.addEventListener("contextmenu", (event) => {
   if (rightDragCandidate?.dragging || Date.now() < suppressRightContextUntil) {
     event.preventDefault();
     event.stopPropagation();
   }
 });
-dropActionMenu.addEventListener('click', async (event) => {
-  const choice = event.target.closest('[data-drop-choice]')?.dataset.dropChoice;
+dropActionMenu.addEventListener("click", async (event) => {
+  const choice = event.target.closest("[data-drop-choice]")?.dataset.dropChoice;
   const drop = pendingRightDrop;
   if (!choice || !drop) return;
   dropActionMenu.hidden = true;
   pendingRightDrop = null;
-  if (choice === 'cancel') return;
-  if (choice === 'shortcut') {
-    const results = await window.fileManager.createShortcuts({ sources: drop.paths, destination: drop.destination.path });
+  if (choice === "cancel") return;
+  if (choice === "shortcut") {
+    const results = await window.fileManager.createShortcuts({
+      sources: drop.paths,
+      destination: drop.destination.path,
+    });
     const failed = results.find((item) => !item.ok);
     await navigate(drop.destination.side, panels[drop.destination.side].path);
-    toast(failed ? failed.error : `Created ${results.length} shortcut${results.length === 1 ? '' : 's'}`);
+    toast(
+      failed
+        ? failed.error
+        : `Created ${results.length} shortcut${results.length === 1 ? "" : "s"}`,
+    );
     return;
   }
-  const results = await transferWithConflicts({ sources: drop.paths, destination: drop.destination.path, operation: choice });
-  const failed = results.find((item) => !item.ok && !item.cancelled && !item.skipped);
+  const results = await transferWithConflicts({
+    sources: drop.paths,
+    destination: drop.destination.path,
+    operation: choice,
+  });
+  const failed = results.find(
+    (item) => !item.ok && !item.cancelled && !item.skipped,
+  );
   const cancelled = results.some((item) => item.cancelled);
   const skipped = results.filter((item) => item.skipped).length;
   const succeeded = results.filter((item) => item.ok).length;
-  await Promise.all([navigate('left', panels.left.path), navigate('right', panels.right.path)]);
+  await Promise.all([
+    navigate("left", panels.left.path),
+    navigate("right", panels.right.path),
+  ]);
   if (failed) toast(failed.error);
-  else if (cancelled) toast(succeeded ? `${choice === 'copy' ? 'Copied' : 'Moved'} ${succeeded} item${succeeded === 1 ? '' : 's'}; remaining items skipped` : 'Transfer cancelled');
-  else if (skipped && succeeded) toast(`${choice === 'copy' ? 'Copied' : 'Moved'} ${succeeded} item${succeeded === 1 ? '' : 's'}; skipped ${skipped} existing item${skipped === 1 ? '' : 's'}`);
-  else if (skipped) toast(`Skipped ${skipped} existing item${skipped === 1 ? '' : 's'}`);
-  else toast(`${choice === 'copy' ? 'Copied' : 'Moved'} ${succeeded} item${succeeded === 1 ? '' : 's'}`);
+  else if (cancelled)
+    toast(
+      succeeded
+        ? `${choice === "copy" ? "Copied" : "Moved"} ${succeeded} item${succeeded === 1 ? "" : "s"}; remaining items skipped`
+        : "Transfer cancelled",
+    );
+  else if (skipped && succeeded)
+    toast(
+      `${choice === "copy" ? "Copied" : "Moved"} ${succeeded} item${succeeded === 1 ? "" : "s"}; skipped ${skipped} existing item${skipped === 1 ? "" : "s"}`,
+    );
+  else if (skipped)
+    toast(`Skipped ${skipped} existing item${skipped === 1 ? "" : "s"}`);
+  else
+    toast(
+      `${choice === "copy" ? "Copied" : "Moved"} ${succeeded} item${succeeded === 1 ? "" : "s"}`,
+    );
 });
-document.addEventListener('mousedown', (event) => {
+document.addEventListener("mousedown", (event) => {
   if (!dropActionMenu.contains(event.target)) {
     dropActionMenu.hidden = true;
     pendingRightDrop = null;
   }
 });
-document.addEventListener('mousedown', (event) => {
-  if (directorySetMenu.contains(event.target) || event.target.closest('[data-action="directory-sets"]')) return;
+document.addEventListener("mousedown", (event) => {
+  if (
+    directorySetMenu.contains(event.target) ||
+    event.target.closest('[data-action="directory-sets"]')
+  )
+    return;
   closeDirectorySetMenu();
 });
 
-document.addEventListener('click', (event) => {
-  const panelElement = event.target.closest('.panel');
-  const action = event.target.closest('[data-action]')?.dataset.action;
+// ============================================================================
+// 16. GLOBAL EVENT LISTENERS & KEYBOARD SHORTCUTS
+// ============================================================================
+document.addEventListener("click", (event) => {
+  const panelElement = event.target.closest(".panel");
+  const action = event.target.closest("[data-action]")?.dataset.action;
   if (panelElement) activeSide = panelElement.dataset.panel;
   else if (!action) return;
-  document.querySelectorAll('.panel').forEach((panel) => panel.classList.toggle('is-active', panel.dataset.panel === activeSide));
+  document
+    .querySelectorAll(".panel")
+    .forEach((panel) =>
+      panel.classList.toggle("is-active", panel.dataset.panel === activeSide),
+    );
   updateSummary();
-  if (action === 'copy') copySelection(activeSide, false);
-  if (action === 'cut') copySelection(activeSide, true);
-  if (action === 'paste') pasteSelection();
-  if (action === 'rename') renameSelection(activeSide);
-  if (action === 'delete') deleteSelection(activeSide);
-  if (action === 'new-folder') createFolder(activeSide);
-  if (action === 'back') moveHistory(activeSide, -1);
-  if (action === 'forward') moveHistory(activeSide, 1);
-  if (action === 'about') openAbout();
+  if (action === "copy") copySelection(activeSide, false);
+  if (action === "cut") copySelection(activeSide, true);
+  if (action === "paste") pasteSelection();
+  if (action === "rename") renameSelection(activeSide);
+  if (action === "delete") deleteSelection(activeSide);
+  if (action === "new-folder") createFolder(activeSide);
+  if (action === "back") moveHistory(activeSide, -1);
+  if (action === "forward") moveHistory(activeSide, 1);
+  if (action === "about") openAbout();
 });
-document.addEventListener('keydown', async (event) => {
+document.addEventListener("keydown", async (event) => {
   if (!nameDialogBackdrop.hidden) {
-    if (event.key === 'Escape') finishNameDialog(null);
+    if (event.key === "Escape") finishNameDialog(null);
     return;
   }
   if (!aboutBackdrop.hidden) {
-    if (event.key === 'Escape') closeAbout();
+    if (event.key === "Escape") closeAbout();
     return;
   }
   if (!propertiesBackdrop.hidden) {
-    if (event.key === 'Escape') closeProperties();
+    if (event.key === "Escape") closeProperties();
     return;
   }
   if (!conflictBackdrop.hidden) {
-    if (event.key === 'Escape') finishConflictDecision({ choice: 'cancel' });
+    if (event.key === "Escape") finishConflictDecision({ choice: "cancel" });
     return;
   }
   if (!settingsBackdrop.hidden) {
-    if (event.key === 'Escape') closeSettings();
+    if (event.key === "Escape") closeSettings();
     return;
   }
-  if (!directorySetMenu.hidden && event.key === 'Escape') {
+  if (!directorySetMenu.hidden && event.key === "Escape") {
     closeDirectorySetMenu();
     return;
   }
   const mod = event.ctrlKey || event.metaKey;
-  if (mod && event.key.toLowerCase() === 'c') { event.preventDefault(); copySelection(activeSide, false); }
-  else if (mod && event.key.toLowerCase() === 'x') { event.preventDefault(); copySelection(activeSide, true); }
-  else if (mod && event.key.toLowerCase() === 'v') { event.preventDefault(); await pasteSelection(); }
-  else if (event.key === 'Delete') { event.preventDefault(); await deleteSelection(activeSide); }
-  else if (event.key === 'Enter') {
+  if (mod && event.key.toLowerCase() === "c") {
+    event.preventDefault();
+    copySelection(activeSide, false);
+  } else if (mod && event.key.toLowerCase() === "x") {
+    event.preventDefault();
+    copySelection(activeSide, true);
+  } else if (mod && event.key.toLowerCase() === "v") {
+    event.preventDefault();
+    await pasteSelection();
+  } else if (event.key === "Delete") {
+    event.preventDefault();
+    await deleteSelection(activeSide);
+  } else if (event.key === "Enter") {
     const entry = getSelected(activeSide)[0];
-    if (entry) { const result = await window.fileManager.open(entry.path); if (result.navigateTo) navigate(activeSide, result.navigateTo); }
-  }
-  else if (event.key === 'Escape') {
+    if (entry) {
+      const result = await window.fileManager.open(entry.path);
+      if (result.navigateTo) navigate(activeSide, result.navigateTo);
+    }
+  } else if (event.key === "Escape") {
     menu.hidden = true;
     historyMenu.hidden = true;
     dropActionMenu.hidden = true;
@@ -1591,133 +2388,177 @@ document.addEventListener('keydown', async (event) => {
   }
 });
 
-document.querySelector('#settings-button').addEventListener('click', openSettings);
-document.querySelector('#settings-close').addEventListener('click', closeSettings);
-nameDialogForm.addEventListener('submit', (event) => {
+// ============================================================================
+// 17. SETTINGS & DIALOG BINDINGS
+// ============================================================================
+document
+  .querySelector("#settings-button")
+  .addEventListener("click", openSettings);
+document
+  .querySelector("#settings-close")
+  .addEventListener("click", closeSettings);
+nameDialogForm.addEventListener("submit", (event) => {
   event.preventDefault();
   finishNameDialog(nameDialogInput.value);
 });
-document.querySelector('#name-dialog-cancel').addEventListener('click', () => finishNameDialog(null));
-nameDialogBackdrop.addEventListener('click', (event) => {
+document
+  .querySelector("#name-dialog-cancel")
+  .addEventListener("click", () => finishNameDialog(null));
+nameDialogBackdrop.addEventListener("click", (event) => {
   if (event.target === nameDialogBackdrop) finishNameDialog(null);
 });
-document.querySelector('#about-close').addEventListener('click', closeAbout);
-aboutBackdrop.addEventListener('click', (event) => {
+document.querySelector("#about-close").addEventListener("click", closeAbout);
+aboutBackdrop.addEventListener("click", (event) => {
   if (event.target === aboutBackdrop) closeAbout();
 });
-document.querySelector('#properties-close').addEventListener('click', closeProperties);
-propertiesBackdrop.addEventListener('click', (event) => {
-  if (event.target.closest('#properties-cancel-scan')) {
+document
+  .querySelector("#properties-close")
+  .addEventListener("click", closeProperties);
+propertiesBackdrop.addEventListener("click", (event) => {
+  if (event.target.closest("#properties-cancel-scan")) {
     if (activeFolderSizeRequest) {
       window.fileManager.cancelFolderSize(activeFolderSizeRequest);
       event.target.disabled = true;
-      document.querySelector('#properties-scan-status').textContent = 'Cancelling folder size calculation…';
+      document.querySelector("#properties-scan-status").textContent =
+        "Cancelling folder size calculation…";
     }
     return;
   }
   if (event.target === propertiesBackdrop) closeProperties();
 });
-document.querySelectorAll('.settings-category').forEach((button) => button.addEventListener('click', () => {
-  settingsCategory = button.dataset.category;
-  renderSettingsCategory();
-}));
-settingsContent.addEventListener('change', (event) => {
-  const setField = event.target.closest('[data-set-field]');
+document.querySelectorAll(".settings-category").forEach((button) =>
+  button.addEventListener("click", () => {
+    settingsCategory = button.dataset.category;
+    renderSettingsCategory();
+  }),
+);
+settingsContent.addEventListener("change", (event) => {
+  const setField = event.target.closest("[data-set-field]");
   if (setField && directorySetDraft) {
     directorySetDraft[setField.dataset.setField] = setField.value;
-    if (setField.dataset.setField === 'type') {
-      if (setField.value === 'pair') {
-        directorySetDraft.leftPath ||= panels.left.path || '';
-        directorySetDraft.rightPath ||= panels.right.path || '';
-      } else directorySetDraft.path ||= panels[activeSide].path || '';
+    if (setField.dataset.setField === "type") {
+      if (setField.value === "pair") {
+        directorySetDraft.leftPath ||= panels.left.path || "";
+        directorySetDraft.rightPath ||= panels.right.path || "";
+      } else directorySetDraft.path ||= panels[activeSide].path || "";
       renderDirectorySets();
     }
     return;
   }
-  const control = event.target.closest('[data-preference]');
+  const control = event.target.closest("[data-preference]");
   if (!control) return;
-  preferences[control.dataset.preference] = control.type === 'checkbox' ? control.checked : control.value;
+  preferences[control.dataset.preference] =
+    control.type === "checkbox" ? control.checked : control.value;
   savePreferences();
-  if (control.dataset.preference === 'directorySetSort') renderDirectorySets();
-  if (control.dataset.preference === 'showHidden' || control.dataset.preference === 'groupFolders') {
-    renderPanel('left');
-    renderPanel('right');
+  if (control.dataset.preference === "directorySetSort") renderDirectorySets();
+  if (
+    control.dataset.preference === "showHidden" ||
+    control.dataset.preference === "groupFolders"
+  ) {
+    renderPanel("left");
+    renderPanel("right");
   }
-  if (control.dataset.preference === 'dateFormat' || control.dataset.preference === 'timeFormat') {
-    renderPanel('left');
-    renderPanel('right');
+  if (
+    control.dataset.preference === "dateFormat" ||
+    control.dataset.preference === "timeFormat"
+  ) {
+    renderPanel("left");
+    renderPanel("right");
   }
 });
-settingsContent.addEventListener('dragstart', (event) => {
-  const row = event.target.closest('[data-sortable-set]');
-  if (!row || preferences.directorySetSort !== 'manual') { event.preventDefault(); return; }
-  event.dataTransfer.setData('text/plain', row.dataset.sortableSet);
-  event.dataTransfer.effectAllowed = 'move';
-  row.classList.add('is-dragging');
+settingsContent.addEventListener("dragstart", (event) => {
+  const row = event.target.closest("[data-sortable-set]");
+  if (!row || preferences.directorySetSort !== "manual") {
+    event.preventDefault();
+    return;
+  }
+  event.dataTransfer.setData("text/plain", row.dataset.sortableSet);
+  event.dataTransfer.effectAllowed = "move";
+  row.classList.add("is-dragging");
 });
-settingsContent.addEventListener('dragend', (event) => {
-  event.target.closest('[data-sortable-set]')?.classList.remove('is-dragging');
-  settingsContent.querySelectorAll('.drop-before,.drop-after').forEach((row) => row.classList.remove('drop-before', 'drop-after'));
+settingsContent.addEventListener("dragend", (event) => {
+  event.target.closest("[data-sortable-set]")?.classList.remove("is-dragging");
+  settingsContent
+    .querySelectorAll(".drop-before,.drop-after")
+    .forEach((row) => row.classList.remove("drop-before", "drop-after"));
 });
-settingsContent.addEventListener('dragover', (event) => {
-  const row = event.target.closest('[data-sortable-set]');
-  if (preferences.directorySetSort !== 'manual' || !row) return;
+settingsContent.addEventListener("dragover", (event) => {
+  const row = event.target.closest("[data-sortable-set]");
+  if (preferences.directorySetSort !== "manual" || !row) return;
   event.preventDefault();
-  settingsContent.querySelectorAll('.drop-before,.drop-after').forEach((item) => item.classList.remove('drop-before', 'drop-after'));
-  const position = event.clientY < row.getBoundingClientRect().top + row.offsetHeight / 2 ? 'drop-before' : 'drop-after';
+  settingsContent
+    .querySelectorAll(".drop-before,.drop-after")
+    .forEach((item) => item.classList.remove("drop-before", "drop-after"));
+  const position =
+    event.clientY < row.getBoundingClientRect().top + row.offsetHeight / 2
+      ? "drop-before"
+      : "drop-after";
   row.classList.add(position);
 });
-settingsContent.addEventListener('drop', (event) => {
-  const target = event.target.closest('[data-sortable-set]');
-  const draggedIndex = event.dataTransfer.getData('text/plain');
-  if (!target || preferences.directorySetSort !== 'manual' || !/^\d+$/.test(draggedIndex)) return;
+settingsContent.addEventListener("drop", (event) => {
+  const target = event.target.closest("[data-sortable-set]");
+  const draggedIndex = event.dataTransfer.getData("text/plain");
+  if (
+    !target ||
+    preferences.directorySetSort !== "manual" ||
+    !/^\d+$/.test(draggedIndex)
+  )
+    return;
   const sourceIndex = Number(draggedIndex);
   event.preventDefault();
   const targetIndex = Number(target.dataset.sortableSet);
-  if (sourceIndex === targetIndex || !preferences.directorySets[sourceIndex]) return;
-  let insertIndex = targetIndex + (target.classList.contains('drop-after') ? 1 : 0);
+  if (sourceIndex === targetIndex || !preferences.directorySets[sourceIndex])
+    return;
+  let insertIndex =
+    targetIndex + (target.classList.contains("drop-after") ? 1 : 0);
   const [set] = preferences.directorySets.splice(sourceIndex, 1);
   if (sourceIndex < insertIndex) insertIndex -= 1;
   preferences.directorySets.splice(insertIndex, 0, set);
   savePreferences();
   renderDirectorySets();
 });
-settingsContent.addEventListener('input', (event) => {
-  const field = event.target.closest('[data-set-field]');
-  if (field && directorySetDraft && field.dataset.setField !== 'type') {
+settingsContent.addEventListener("input", (event) => {
+  const field = event.target.closest("[data-set-field]");
+  if (field && directorySetDraft && field.dataset.setField !== "type") {
     directorySetDraft[field.dataset.setField] = field.value;
   }
 });
-settingsContent.addEventListener('click', async (event) => {
-  if (event.target.closest('[data-cache-browse]')) {
-    const input = settingsContent.querySelector('#thumbnail-cache-path');
+settingsContent.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-cache-browse]")) {
+    const input = settingsContent.querySelector("#thumbnail-cache-path");
     try {
-      const directory = await window.fileManager.chooseDirectory(input.value.trim() || defaultThumbnailCachePath);
+      const directory = await window.fileManager.chooseDirectory(
+        input.value.trim() || defaultThumbnailCachePath,
+      );
       if (directory) {
         preferences.thumbnailCachePath = directory;
         savePreferences();
         renderSettingsCategory();
       }
-    } catch (error) { toast(`Could not choose cache folder: ${error.message}`); }
+    } catch (error) {
+      toast(`Could not choose cache folder: ${error.message}`);
+    }
     return;
   }
-  if (event.target.closest('[data-cache-default]')) {
-    preferences.thumbnailCachePath = '';
+  if (event.target.closest("[data-cache-default]")) {
+    preferences.thumbnailCachePath = "";
     savePreferences();
     renderSettingsCategory();
     return;
   }
-  if (event.target.closest('[data-clear-thumbnail-cache]')) {
-    const button = event.target.closest('[data-clear-thumbnail-cache]');
-    const input = settingsContent.querySelector('#thumbnail-cache-path');
-    const status = settingsContent.querySelector('#thumbnail-cache-status');
+  if (event.target.closest("[data-clear-thumbnail-cache]")) {
+    const button = event.target.closest("[data-clear-thumbnail-cache]");
+    const input = settingsContent.querySelector("#thumbnail-cache-path");
+    const status = settingsContent.querySelector("#thumbnail-cache-status");
     preferences.thumbnailCachePath = input.value.trim();
     savePreferences();
     button.disabled = true;
-    status.textContent = 'Clearing cached thumbnails…';
+    status.textContent = "Clearing cached thumbnails…";
     try {
-      const count = await window.fileManager.clearThumbnailCache(preferences.thumbnailCachePath);
-      status.textContent = `Cleared ${count} cached thumbnail${count === 1 ? '' : 's'}.`;
+      const count = await window.fileManager.clearThumbnailCache(
+        preferences.thumbnailCachePath,
+      );
+      status.textContent = `Cleared ${count} cached thumbnail${count === 1 ? "" : "s"}.`;
     } catch (error) {
       status.textContent = `Could not clear the cache: ${error.message}`;
     } finally {
@@ -1725,20 +2566,26 @@ settingsContent.addEventListener('click', async (event) => {
     }
     return;
   }
-  if (event.target.closest('[data-new-set]')) {
-    directorySetDraft = { index: null, type: 'single', path: panels[activeSide].path || '', openIn: 'active', name: '' };
+  if (event.target.closest("[data-new-set]")) {
+    directorySetDraft = {
+      index: null,
+      type: "single",
+      path: panels[activeSide].path || "",
+      openIn: "active",
+      name: "",
+    };
     renderDirectorySets();
     return;
   }
-  const usePanel = event.target.closest('[data-use-panel]');
+  const usePanel = event.target.closest("[data-use-panel]");
   if (usePanel && directorySetDraft) {
     const side = usePanel.dataset.usePanel;
-    const field = directorySetDraft.type === 'pair' ? `${side}Path` : 'path';
-    directorySetDraft[field] = panels[side].path || '';
+    const field = directorySetDraft.type === "pair" ? `${side}Path` : "path";
+    directorySetDraft[field] = panels[side].path || "";
     renderDirectorySets();
     return;
   }
-  const browse = event.target.closest('[data-browse-field]');
+  const browse = event.target.closest("[data-browse-field]");
   if (browse && directorySetDraft) {
     try {
       const directory = await window.fileManager.chooseDirectory();
@@ -1746,21 +2593,38 @@ settingsContent.addEventListener('click', async (event) => {
         directorySetDraft[browse.dataset.browseField] = directory;
         renderDirectorySets();
       }
-    } catch (error) { toast(`Could not open folder picker: ${error.message}`); }
+    } catch (error) {
+      toast(`Could not open folder picker: ${error.message}`);
+    }
     return;
   }
-  if (event.target.closest('[data-cancel-set]')) {
+  if (event.target.closest("[data-cancel-set]")) {
     directorySetDraft = null;
     renderDirectorySets();
     return;
   }
-  if (event.target.closest('[data-save-set]')) {
+  if (event.target.closest("[data-save-set]")) {
     const draft = directorySetDraft;
-    const requiredPaths = draft.type === 'pair' ? [draft.leftPath, draft.rightPath] : [draft.path];
-    if (requiredPaths.some((directory) => !directory?.trim())) { toast('Enter a directory for each panel'); return; }
-    const record = draft.type === 'pair'
-      ? { type: 'pair', leftPath: draft.leftPath.trim(), rightPath: draft.rightPath.trim(), name: (draft.name || '').trim() }
-      : { type: 'single', path: draft.path.trim(), openIn: draft.openIn || 'active', name: (draft.name || '').trim() };
+    const requiredPaths =
+      draft.type === "pair" ? [draft.leftPath, draft.rightPath] : [draft.path];
+    if (requiredPaths.some((directory) => !directory?.trim())) {
+      toast("Enter a directory for each panel");
+      return;
+    }
+    const record =
+      draft.type === "pair"
+        ? {
+            type: "pair",
+            leftPath: draft.leftPath.trim(),
+            rightPath: draft.rightPath.trim(),
+            name: (draft.name || "").trim(),
+          }
+        : {
+            type: "single",
+            path: draft.path.trim(),
+            openIn: draft.openIn || "active",
+            name: (draft.name || "").trim(),
+          };
     if (draft.index === null) preferences.directorySets.push(record);
     else preferences.directorySets[draft.index] = record;
     savePreferences();
@@ -1768,20 +2632,23 @@ settingsContent.addEventListener('click', async (event) => {
     renderDirectorySets();
     return;
   }
-  const remove = event.target.closest('[data-remove-set]');
+  const remove = event.target.closest("[data-remove-set]");
   if (remove) {
     preferences.directorySets.splice(Number(remove.dataset.removeSet), 1);
     savePreferences();
     renderDirectorySets();
     return;
   }
-  const edit = event.target.closest('[data-edit-set]');
+  const edit = event.target.closest("[data-edit-set]");
   if (edit) {
-    directorySetDraft = { ...preferences.directorySets[Number(edit.dataset.editSet)], index: Number(edit.dataset.editSet) };
+    directorySetDraft = {
+      ...preferences.directorySets[Number(edit.dataset.editSet)],
+      index: Number(edit.dataset.editSet),
+    };
     renderDirectorySets();
     return;
   }
-  const open = event.target.closest('[data-open-set]');
+  const open = event.target.closest("[data-open-set]");
   if (open) {
     const set = preferences.directorySets[Number(open.dataset.openSet)];
     if (!set) return;
@@ -1790,116 +2657,123 @@ settingsContent.addEventListener('click', async (event) => {
   }
 });
 
+// ============================================================================
+// 18. APP INITIALIZATION & SPLITTER RESIZING
+// ============================================================================
 async function initialize() {
   const home = await window.fileManager.list(undefined).catch(() => null);
   refreshDetectedDrives();
-  const start = home?.path || 'C:\\';
-  const docs = `${start.replace(/[\\/]$/, '')}${start.includes('\\') ? '\\' : '/'}Documents`;
-  const savedLeft = typeof savedLayout.left?.path === 'string' ? savedLayout.left.path : null;
-  const savedRight = typeof savedLayout.right?.path === 'string' ? savedLayout.right.path : null;
-  const leftOpened = await navigate('left', savedLeft || start);
-  if (!leftOpened && savedLeft) await navigate('left', start);
+  const start = home?.path || "C:\\";
+  const docs = `${start.replace(/[\\/]$/, "")}${start.includes("\\") ? "\\" : "/"}Documents`;
+  const savedLeft =
+    typeof savedLayout.left?.path === "string" ? savedLayout.left.path : null;
+  const savedRight =
+    typeof savedLayout.right?.path === "string" ? savedLayout.right.path : null;
+  const leftOpened = await navigate("left", savedLeft || start);
+  if (!leftOpened && savedLeft) await navigate("left", start);
   const rightStart = savedRight || docs;
   let rightExists = await window.fileManager.list(rightStart).catch(() => null);
-  if (!rightExists && savedRight) rightExists = await window.fileManager.list(docs).catch(() => null);
-  await navigate('right', rightExists?.path || start);
+  if (!rightExists && savedRight)
+    rightExists = await window.fileManager.list(docs).catch(() => null);
+  await navigate("right", rightExists?.path || start);
   layoutInitialized = true;
   persistLayout();
 }
 initialize();
-window.addEventListener('focus', refreshDetectedDrives);
+window.addEventListener("focus", refreshDetectedDrives);
 
-document.querySelectorAll('.menu-trigger').forEach((trigger) => {
-  trigger.addEventListener('click', () => {
-    const wasOpen = trigger.getAttribute('aria-expanded') === 'true';
-    document.querySelectorAll('.menu-trigger').forEach((item) => {
-      item.setAttribute('aria-expanded', 'false');
+document.querySelectorAll(".menu-trigger").forEach((trigger) => {
+  trigger.addEventListener("click", () => {
+    const wasOpen = trigger.getAttribute("aria-expanded") === "true";
+    document.querySelectorAll(".menu-trigger").forEach((item) => {
+      item.setAttribute("aria-expanded", "false");
       item.nextElementSibling.hidden = true;
     });
     if (!wasOpen) {
-      trigger.setAttribute('aria-expanded', 'true');
+      trigger.setAttribute("aria-expanded", "true");
       trigger.nextElementSibling.hidden = false;
     }
   });
 });
-document.addEventListener('click', (event) => {
-  if (event.target.closest('.menu-group')) return;
-  document.querySelectorAll('.menu-trigger').forEach((trigger) => {
-    trigger.setAttribute('aria-expanded', 'false');
+document.addEventListener("click", (event) => {
+  if (event.target.closest(".menu-group")) return;
+  document.querySelectorAll(".menu-trigger").forEach((trigger) => {
+    trigger.setAttribute("aria-expanded", "false");
     trigger.nextElementSibling.hidden = true;
   });
 });
 
-
-
-
-
-
-
-
-
-
-
-
-document.querySelectorAll('.menu-group').forEach((group) => {
-  group.addEventListener('mouseenter', () => {
-    const triggers = [...document.querySelectorAll('.menu-trigger')];
-    const menuIsOpen = triggers.some((trigger) => trigger.getAttribute('aria-expanded') === 'true');
+document.querySelectorAll(".menu-group").forEach((group) => {
+  group.addEventListener("mouseenter", () => {
+    const triggers = [...document.querySelectorAll(".menu-trigger")];
+    const menuIsOpen = triggers.some(
+      (trigger) => trigger.getAttribute("aria-expanded") === "true",
+    );
     if (!menuIsOpen) return;
-    const current = group.querySelector('.menu-trigger');
+    const current = group.querySelector(".menu-trigger");
     triggers.forEach((trigger) => {
       const shouldOpen = trigger === current;
-      trigger.setAttribute('aria-expanded', String(shouldOpen));
+      trigger.setAttribute("aria-expanded", String(shouldOpen));
       trigger.nextElementSibling.hidden = !shouldOpen;
     });
   });
 });
 
-const workspaceElement = document.querySelector('.workspace');
-const splitterElement = document.querySelector('.splitter');
-let panelRatio = Number.isFinite(savedLayout.panelRatio) ? savedLayout.panelRatio : 0.5;
+const workspaceElement = document.querySelector(".workspace");
+const splitterElement = document.querySelector(".splitter");
+let panelRatio = Number.isFinite(savedLayout.panelRatio)
+  ? savedLayout.panelRatio
+  : 0.5;
 function setPanelRatio(ratio) {
-  const availableWidth = Math.max(1, workspaceElement.clientWidth - splitterElement.offsetWidth);
+  const availableWidth = Math.max(
+    1,
+    workspaceElement.clientWidth - splitterElement.offsetWidth,
+  );
   const minimumRatio = Math.min(0.5, 240 / availableWidth);
   panelRatio = Math.max(minimumRatio, Math.min(1 - minimumRatio, ratio));
-  workspaceElement.style.setProperty('--left-panel', `${panelRatio}fr`);
-  workspaceElement.style.setProperty('--right-panel', `${1 - panelRatio}fr`);
-  splitterElement.setAttribute('aria-valuenow', String(Math.round(panelRatio * 100)));
+  workspaceElement.style.setProperty("--left-panel", `${panelRatio}fr`);
+  workspaceElement.style.setProperty("--right-panel", `${1 - panelRatio}fr`);
+  splitterElement.setAttribute(
+    "aria-valuenow",
+    String(Math.round(panelRatio * 100)),
+  );
 }
 setPanelRatio(panelRatio);
 let resizingPointerId = null;
-splitterElement.addEventListener('pointerdown', (event) => {
+splitterElement.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
   splitterElement.focus({ preventScroll: true });
   event.preventDefault();
   resizingPointerId = event.pointerId;
-  splitterElement.classList.add('is-dragging');
+  splitterElement.classList.add("is-dragging");
   splitterElement.setPointerCapture(event.pointerId);
 });
-splitterElement.addEventListener('pointermove', (event) => {
+splitterElement.addEventListener("pointermove", (event) => {
   if (resizingPointerId !== event.pointerId) return;
   const bounds = workspaceElement.getBoundingClientRect();
-  const availableWidth = Math.max(1, bounds.width - splitterElement.offsetWidth);
-  const leftWidth = event.clientX - bounds.left - splitterElement.offsetWidth / 2;
+  const availableWidth = Math.max(
+    1,
+    bounds.width - splitterElement.offsetWidth,
+  );
+  const leftWidth =
+    event.clientX - bounds.left - splitterElement.offsetWidth / 2;
   setPanelRatio(leftWidth / availableWidth);
 });
 function stopPanelResize(event) {
   if (resizingPointerId !== event.pointerId) return;
   resizingPointerId = null;
-  splitterElement.classList.remove('is-dragging');
-  if (splitterElement.hasPointerCapture(event.pointerId)) splitterElement.releasePointerCapture(event.pointerId);
+  splitterElement.classList.remove("is-dragging");
+  if (splitterElement.hasPointerCapture(event.pointerId))
+    splitterElement.releasePointerCapture(event.pointerId);
   persistLayout();
 }
-splitterElement.addEventListener('pointerup', stopPanelResize);
-splitterElement.addEventListener('pointercancel', stopPanelResize);
-splitterElement.addEventListener('keydown', (event) => {
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+splitterElement.addEventListener("pointerup", stopPanelResize);
+splitterElement.addEventListener("pointercancel", stopPanelResize);
+splitterElement.addEventListener("keydown", (event) => {
+  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
     event.preventDefault();
-    setPanelRatio(panelRatio + (event.key === 'ArrowRight' ? 0.01 : -0.01));
+    setPanelRatio(panelRatio + (event.key === "ArrowRight" ? 0.01 : -0.01));
     persistLayout();
   }
 });
-window.addEventListener('beforeunload', persistLayout);
-
-
-
+window.addEventListener("beforeunload", persistLayout);
