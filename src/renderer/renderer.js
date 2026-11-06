@@ -3,11 +3,7 @@ import { renderDriveButtons, panelStatus, renderPanel } from "../ui/panel-render
 import {
   escapeHtml,
   getPanelElement,
-  formatDate,
   formatSize,
-  icon,
-  imageExtensions,
-  kind,
   pathParts,
   setStatus,
   toast,
@@ -28,7 +24,6 @@ import {
   makeDialogDraggable,
   showProperties,
   closeProperties,
-  cancelFolderSizeScan,
   askTransferConflict,
   finishConflictDecision,
   askForName,
@@ -63,6 +58,15 @@ import {
   refreshDriveButtonGroups,
   bindDriveButtons,
 } from "../ui/drives-service.js";
+
+import {
+  initThumbnailHistoryService,
+  applyThumbnailSize,
+  loadThumbnailImages,
+  updateSummary,
+  moveHistory,
+  bindHistoryLongPress,
+} from "../ui/thumbnail-history-service.js";
 
 
 // ============================================================================
@@ -215,6 +219,18 @@ initSettingsService({
   directorySetMenu,
 });
 
+initThumbnailHistoryService({
+  panels,
+  preferences: () => preferences,
+  getActiveSide: () => activeSide,
+  navigate,
+  renderPanel: (side) =>
+    renderPanel(side, panels, currentActiveSide, detectedDrives, preferences),
+  bindPanel,
+  summary,
+  historyMenu,
+});
+
 
 // ============================================================================
 // 4. STORAGE PERSISTENCE & THEME SYNC
@@ -301,18 +317,6 @@ window.addEventListener("storage", (event) => {
   }
 });
 savePreferences();
-
-
-// ============================================================================
-// 5. FORMATTERS, ICONS & UTILITIES
-// ============================================================================
-
-function isImageEntry(entry) {
-  return (
-    !entry.isDirectory &&
-    imageExtensions.has(entry.name.split(".").pop().toLowerCase())
-  );
-}
 
 
 // ============================================================================
@@ -701,195 +705,6 @@ searchCancel.addEventListener("click", () => {
 // ============================================================================
 // 11. THUMBNAILS, STATUS & HISTORY
 // ============================================================================
-
-function applyThumbnailSize(panel) {
-  const panelEl = getPanelElement(panel.side); // Uses panel.side stored in the model
-  if (!panelEl) return;
-
-  panelEl.style.setProperty("--icon-size", `${panel.iconSize}px`);
-
-  // Update view mode classes if applicable
-  panelEl.classList.toggle("view-icons", panel.view === "icons");
-  panelEl.classList.toggle("view-details", panel.view === "details");
-}
-
-async function loadThumbnailImages(side, generation) {
-  const panel = panels[side];
-  const panelEl = getPanelElement(side); // Uses panel.side stored in the model
-  if (!panelEl) return;
-  const tiles = [...panelEl.querySelectorAll(".icon-tile")].filter((tile) => {
-    const entry = panel.entries[Number(tile.dataset.entry)];
-    return entry && isImageEntry(entry);
-  });
-  let nextIndex = 0;
-  const loadNext = async () => {
-    while (
-      nextIndex < tiles.length &&
-      panel.thumbnailGeneration === generation
-    ) {
-      const tile = tiles[nextIndex++];
-      const entry = panel.entries[Number(tile.dataset.entry)];
-      if (!entry || !tile.isConnected) continue;
-      try {
-        const dataUrl = await window.fileManager.thumbnail(
-          entry.path,
-          preferences.thumbnailCachePath,
-        );
-        if (panel.thumbnailGeneration !== generation) return;
-        const visual = tile.querySelector(".tile-visual");
-        if (!dataUrl || !visual?.isConnected || !tile.isConnected) continue;
-        const thumbnail = document.createElement("img");
-        thumbnail.className = "thumbnail-image";
-        thumbnail.alt = "";
-        thumbnail.src = dataUrl;
-        visual.replaceChildren(thumbnail);
-      } catch {
-        /* Keep the file type icon when a preview cannot be created. */
-      }
-    }
-  };
-  await Promise.all(
-    Array.from({ length: Math.min(4, tiles.length) }, loadNext),
-  );
-}
-
-function updateSummary() {
-  updateHistoryButtons();
-  const directory = panels[activeSide].path;
-  const requestId = ++diskSpaceRequestId;
-  clearTimeout(diskSpaceTimer);
-  if (!directory) {
-    summary.textContent = "Drive space unavailable";
-    displayedSpacePath = null;
-    return;
-  }
-  if (displayedSpacePath !== directory)
-    summary.textContent = "Reading drive space…";
-  diskSpaceTimer = setTimeout(async () => {
-    try {
-      const space = await window.fileManager.diskSpace(directory);
-      if (
-        requestId !== diskSpaceRequestId ||
-        panels[activeSide].path !== directory
-      )
-        return;
-      summary.textContent = `Used ${formatSize(space.used, false)} · Free ${formatSize(space.free, false)}`;
-      displayedSpacePath = directory;
-    } catch {
-      if (
-        requestId !== diskSpaceRequestId ||
-        panels[activeSide].path !== directory
-      )
-        return;
-      summary.textContent = "Drive space unavailable";
-      displayedSpacePath = directory;
-    }
-  }, 120);
-}
-
-function updateHistoryButtons() {
-  const panel = panels[activeSide];
-  const back = document.querySelector('[data-action="back"]');
-  const forward = document.querySelector('[data-action="forward"]');
-  back.disabled = panel.historyIndex <= 0;
-  forward.disabled =
-    panel.historyIndex < 0 || panel.historyIndex >= panel.history.length - 1;
-}
-
-function moveHistory(side, offset) {
-  const panel = panels[side];
-  const targetIndex = panel.historyIndex + offset;
-  if (targetIndex < 0 || targetIndex >= panel.history.length) return;
-  moveHistoryTo(side, targetIndex);
-}
-
-function moveHistoryTo(side, targetIndex) {
-  const panel = panels[side];
-  if (
-    targetIndex < 0 ||
-    targetIndex >= panel.history.length ||
-    targetIndex === panel.historyIndex
-  )
-    return;
-  navigate(side, panel.history[targetIndex], {
-    historyMode: "move",
-    historyIndex: targetIndex,
-  });
-}
-
-function showHistoryMenu(action, button) {
-  const panel = panels[activeSide];
-  const indices =
-    action === "back"
-      ? Array.from(
-          { length: Math.max(0, panel.historyIndex) },
-          (_, index) => panel.historyIndex - index - 1,
-        )
-      : Array.from(
-          {
-            length: Math.max(0, panel.history.length - panel.historyIndex - 1),
-          },
-          (_, index) => panel.historyIndex + index + 1,
-        );
-  if (!indices.length) return;
-  const side = activeSide;
-  historyMenu.innerHTML = indices
-    .map((index) => {
-      const directory = panel.history[index];
-      return `<button role="menuitem" data-history-side="${side}" data-history-index="${index}" title="${escapeHtml(directory)}">${escapeHtml(directory)}</button>`;
-    })
-    .join("");
-  const bounds = button.getBoundingClientRect();
-  historyMenu.hidden = false;
-  historyMenu.style.left = `${Math.max(8, Math.min(bounds.left, innerWidth - 330))}px`;
-  historyMenu.style.top = `${Math.max(8, Math.min(bounds.bottom + 4, innerHeight - Math.min(historyMenu.scrollHeight, 334) - 8))}px`;
-}
-
-function bindHistoryLongPress() {
-  document
-    .querySelectorAll('[data-action="back"],[data-action="forward"]')
-    .forEach((button) => {
-      let holdTimer = null;
-      let startX = 0;
-      let startY = 0;
-      button.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0 || button.disabled) return;
-        startX = event.clientX;
-        startY = event.clientY;
-        button.setPointerCapture(event.pointerId);
-        holdTimer = setTimeout(() => {
-          showHistoryMenu(button.dataset.action, button);
-          button.dataset.historyLongPress = "true";
-        }, 450);
-      });
-      const clearHold = () => {
-        clearTimeout(holdTimer);
-        holdTimer = null;
-      };
-      button.addEventListener("pointermove", (event) => {
-        if (Math.hypot(event.clientX - startX, event.clientY - startY) > 8)
-          clearHold();
-      });
-      button.addEventListener("pointerup", clearHold);
-      button.addEventListener("pointercancel", clearHold);
-      button.addEventListener("click", (event) => {
-        if (button.dataset.historyLongPress === "true") {
-          delete button.dataset.historyLongPress;
-          event.preventDefault();
-          event.stopImmediatePropagation();
-        }
-      });
-    });
-  historyMenu.addEventListener("click", (event) => {
-    const item = event.target.closest("[data-history-index]");
-    if (!item) return;
-    historyMenu.hidden = true;
-    moveHistoryTo(item.dataset.historySide, Number(item.dataset.historyIndex));
-  });
-  document.addEventListener("mousedown", (event) => {
-    if (!historyMenu.contains(event.target)) historyMenu.hidden = true;
-  });
-}
 
 bindHistoryLongPress();
 
@@ -1427,15 +1242,6 @@ function updateRightDropTarget(x, y) {
       "right-drop-target",
     );
   }
-}
-
-function openDropActionMenu(paths, destination, x, y) {
-  pendingRightDrop = { paths, destination };
-  dropActionMenu.hidden = false;
-  const width = dropActionMenu.offsetWidth;
-  const height = dropActionMenu.offsetHeight;
-  dropActionMenu.style.left = `${Math.max(6, Math.min(x, innerWidth - width - 6))}px`;
-  dropActionMenu.style.top = `${Math.max(6, Math.min(y, innerHeight - height - 6))}px`;
 }
 
 document.addEventListener("pointerdown", (event) => {

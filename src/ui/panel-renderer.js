@@ -11,6 +11,8 @@ import {
   pathParts,
 } from "../utils/panel-utils.js";
 
+import { applyThumbnailSize, loadThumbnailImages } from "../ui/thumbnail-history-service.js";
+
 /**
  * Renders the drive buttons for the specified side.
  * @param {Array} detectedDrives - The list of detected drives.
