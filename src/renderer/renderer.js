@@ -12,6 +12,7 @@ import {
   setStatus,
   toast,
 } from "../utils/panel-utils.js";
+
 import {
   copySelection,
   deleteSelection,
@@ -21,6 +22,7 @@ import {
   renameSelection,
   transferWithConflicts,
 } from "../ui/context-menu-service.js";
+
 import {
   initDialogsService,
   makeDialogDraggable,
@@ -44,6 +46,23 @@ import {
   renderDirectorySets,
   switchCategory,
 } from "../ui/settings-service.js";
+
+import {
+  initDragDropService,
+  handlePointerDown,
+  handlePointerMove,
+  handlePointerUp,
+  getSuppressRightContextUntil,
+  isDraggingCandidate,
+  executeDropAction,
+} from "../ui/drag-drop-service.js";
+
+import {
+  initDrivesService,
+  refreshDetectedDrives,
+  refreshDriveButtonGroups,
+  bindDriveButtons,
+} from "../ui/drives-service.js";
 
 
 // ============================================================================
@@ -129,19 +148,38 @@ const nameDialogForm = document.querySelector("#name-dialog-form");
 const nameDialogInput = document.querySelector("#name-dialog-input");
 const aboutBackdrop = document.querySelector("#about-backdrop");
 const propertiesBackdrop = document.querySelector("#properties-backdrop");
-let settingsCategory = "files";
 let defaultThumbnailCachePath = "";
 let directorySetDraft = null;
-let resolveConflictDecision = null;
-let resolveNameDialog = null;
 let activeFolderSizeRequest = null;
 let rightDragCandidate = null;
-let pendingRightDrop = null;
 let suppressRightContextUntil = 0;
 let diskSpaceTimer = null;
 let diskSpaceRequestId = 0;
 let displayedSpacePath = null;
 
+initDrivesService({
+  panels,
+  navigate,
+  updateSummary,
+  getDetectedDrives: () => detectedDrives,
+  setDetectedDrives: (drives) => {
+    detectedDrives = drives;
+  },
+  getActiveSide: () => activeSide,
+  setActiveSide: (side) => {
+    activeSide = side;
+  },
+  driveContextMenu,
+});
+
+initDragDropService({
+  panels,
+  activeSide: () => activeSide,
+  getSelected,
+  transferWithConflicts,
+  navigate,
+  dropActionMenu,
+});
 
 initClipboardService({
   panels,
@@ -409,82 +447,6 @@ async function navigate(
   }
 }
 
-
-async function refreshDetectedDrives() {
-  try {
-    detectedDrives = await window.fileManager.roots();
-    refreshDriveButtonGroups();
-  } catch {
-    /* Keep the last detected drive buttons if discovery temporarily fails. */
-  }
-}
-function refreshDriveButtonGroups() {
-  for (const side of ["left", "right"]) {
-    const group = getPanelElement(side).querySelector("[data-drive-buttons]");
-    if (!group) continue;
-    group.innerHTML = renderDriveButtons(detectedDrives, side, panels);
-    bindDriveButtons(side);
-  }
-}
-function bindDriveButtons(side) {
-  const group = getPanelElement(side).querySelector("[data-drive-buttons]");
-  group?.querySelectorAll("[data-drive-button]").forEach((button) => {
-    button.addEventListener("click", () => {
-      activeSide = side;
-      getPanelElement("left").classList.toggle("is-active", side === "left");
-      getPanelElement("right").classList.toggle("is-active", side === "right");
-      updateSummary();
-      navigate(side, button.dataset.driveButton);
-    });
-    button.addEventListener("contextmenu", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      activeSide = side;
-      getPanelElement("left").classList.toggle("is-active", side === "left");
-      getPanelElement("right").classList.toggle("is-active", side === "right");
-      updateSummary();
-      showDriveContextMenu(
-        side,
-        button.dataset.driveButton,
-        event.clientX,
-        event.clientY,
-      );
-    });
-  });
-}
-async function showDriveContextMenu(side, rootPath, x, y) {
-  driveContextSide = side;
-  driveContextRoot = rootPath;
-  driveContextMenu.innerHTML =
-    '<div class="drive-context-status">Loading drive details…</div>';
-  driveContextMenu.hidden = false;
-  driveContextMenu.style.left = `${Math.max(8, Math.min(x, innerWidth - 218))}px`;
-  driveContextMenu.style.top = `${Math.max(8, Math.min(y, innerHeight - 180))}px`;
-  try {
-    const roots = await window.fileManager.roots();
-    if (
-      driveContextSide !== side ||
-      driveContextRoot !== rootPath ||
-      driveContextMenu.hidden
-    )
-      return;
-    const root = roots.find(
-      (entry) => entry.path.toLowerCase() === rootPath.toLowerCase(),
-    );
-    const driveName = root?.name || rootPath.slice(0, 2);
-    const details = root?.label
-      ? `<small>${escapeHtml(root.label)}</small>`
-      : "";
-    const action = root?.canEject
-      ? '<button role="menuitem" data-eject-drive>Eject</button>'
-      : '<button role="menuitem" data-open-drive>Open in File Explorer</button>';
-    driveContextMenu.innerHTML = `<div class="drive-context-heading"><strong>${escapeHtml(driveName)}</strong>${details}</div><div class="menu-separator"></div>${action}`;
-  } catch (error) {
-    driveContextMenu.innerHTML =
-      '<div class="drive-context-status">Could not load drive details.</div>';
-    toast(`Could not load drive details: ${error.message}`);
-  }
-}
 driveContextMenu.addEventListener("click", async (event) => {
   if (!driveContextRoot) return;
   const eject = event.target.closest("[data-eject-drive]");
@@ -532,6 +494,7 @@ driveContextMenu.addEventListener("click", async (event) => {
     await navigate(affectedSide, target);
   }
 });
+
 document.addEventListener("mousedown", (event) => {
   if (!driveContextMenu.contains(event.target)) {
     driveContextMenu.hidden = true;
@@ -539,6 +502,7 @@ document.addEventListener("mousedown", (event) => {
     driveContextRoot = null;
   }
 });
+
 window.fileManager.onRestoreDirectoryWatch(({ side, directory }) => {
   const panel = panels[side];
   if (!panel || panel.path !== directory) return;
@@ -552,6 +516,7 @@ window.fileManager.onRestoreDirectoryWatch(({ side, directory }) => {
       if (panel.watchPath === directory) panel.watchPath = null;
     });
 });
+
 function editPanelPath(side) {
   const panel = panels[side];
   const panelEl = getPanelElement(side);
@@ -601,20 +566,10 @@ function editPanelPath(side) {
   });
 }
 
+
 // ============================================================================
 // 10. ENTRIES RENDERING & SEARCH ENGINE
 // ============================================================================
-
-function searchLocation(entry, panel) {
-  if (!panel.searchRoot) return "";
-  const relative = entry.path
-    .slice(panel.searchRoot.length)
-    .replace(/^[\\/]+/, "")
-    .split(/[\\/]/)
-    .slice(0, -1)
-    .join(" › ");
-  return relative || ".";
-}
 
 const searchForm = document.querySelector("#global-search");
 const searchQuery = document.querySelector("#search-query");
@@ -679,6 +634,7 @@ async function runPanelSearch() {
     toast(error.message);
   }
 }
+
 window.fileManager.onSearchProgress(
   ({ searchId, scanned, matches, results = [] }) => {
     const side = ["left", "right"].find(
@@ -705,11 +661,13 @@ window.fileManager.onSearchProgress(
     }, 120);
   },
 );
+
 searchForm.addEventListener("submit", (event) => {
   event.preventDefault();
   clearTimeout(searchDebounceTimer);
   runPanelSearch();
 });
+
 searchQuery.addEventListener("input", () => {
   updateSearchControl();
   clearTimeout(searchDebounceTimer);
@@ -720,6 +678,7 @@ searchQuery.addEventListener("input", () => {
   const panel = panels[activeSide];
   if (panel.searchRoot) navigate(activeSide, panel.searchRoot);
 });
+
 searchQuery.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     event.preventDefault();
@@ -730,6 +689,7 @@ searchQuery.addEventListener("keydown", (event) => {
     updateSearchControl();
   }
 });
+
 searchCancel.addEventListener("click", () => {
   const panel = panels[activeSide];
   if (panel.searchId) window.fileManager.cancelSearch(panel.searchId);
@@ -741,6 +701,7 @@ searchCancel.addEventListener("click", () => {
 // ============================================================================
 // 11. THUMBNAILS, STATUS & HISTORY
 // ============================================================================
+
 function applyThumbnailSize(panel) {
   const panelEl = getPanelElement(panel.side); // Uses panel.side stored in the model
   if (!panelEl) return;
@@ -791,6 +752,7 @@ async function loadThumbnailImages(side, generation) {
     Array.from({ length: Math.min(4, tiles.length) }, loadNext),
   );
 }
+
 function updateSummary() {
   updateHistoryButtons();
   const directory = panels[activeSide].path;
@@ -824,6 +786,7 @@ function updateSummary() {
     }
   }, 120);
 }
+
 function updateHistoryButtons() {
   const panel = panels[activeSide];
   const back = document.querySelector('[data-action="back"]');
@@ -832,12 +795,14 @@ function updateHistoryButtons() {
   forward.disabled =
     panel.historyIndex < 0 || panel.historyIndex >= panel.history.length - 1;
 }
+
 function moveHistory(side, offset) {
   const panel = panels[side];
   const targetIndex = panel.historyIndex + offset;
   if (targetIndex < 0 || targetIndex >= panel.history.length) return;
   moveHistoryTo(side, targetIndex);
 }
+
 function moveHistoryTo(side, targetIndex) {
   const panel = panels[side];
   if (
@@ -851,6 +816,7 @@ function moveHistoryTo(side, targetIndex) {
     historyIndex: targetIndex,
   });
 }
+
 function showHistoryMenu(action, button) {
   const panel = panels[activeSide];
   const indices =
@@ -878,6 +844,7 @@ function showHistoryMenu(action, button) {
   historyMenu.style.left = `${Math.max(8, Math.min(bounds.left, innerWidth - 330))}px`;
   historyMenu.style.top = `${Math.max(8, Math.min(bounds.bottom + 4, innerHeight - Math.min(historyMenu.scrollHeight, 334) - 8))}px`;
 }
+
 function bindHistoryLongPress() {
   document
     .querySelectorAll('[data-action="back"],[data-action="forward"]')
@@ -923,7 +890,9 @@ function bindHistoryLongPress() {
     if (!historyMenu.contains(event.target)) historyMenu.hidden = true;
   });
 }
+
 bindHistoryLongPress();
+
 window.fileManager.onDirectoryChanged(({ side, directory }) => {
   const panel = panels[side];
   if (!panel || panel.path !== directory) return;
@@ -1000,6 +969,7 @@ function refreshSelection() {
   });
   updateSummary();
 }
+
 async function createFolder(side) {
   const parent = panels[side].path;
   const name = await askForName({
@@ -1311,6 +1281,7 @@ function showContextMenu(x, y, side, entry) {
   );
   document.addEventListener("mousedown", hideMenu, { once: true });
 }
+
 function showBackgroundContextMenu(x, y, side) {
   menu.innerHTML =
     '<div class="context-menu-item context-submenu-parent"><button role="menuitem" data-open-new-submenu aria-haspopup="true" aria-expanded="false">New<span aria-hidden="true">›</span></button><div class="context-submenu" hidden><button role="menuitem" data-background-action="folder">Folder</button><button role="menuitem" data-background-action="shortcut">Shortcut</button></div></div><div class="menu-separator"></div><button role="menuitem" data-background-action="properties">Properties</button><button role="menuitem" data-background-action="explorer">Open in File Explorer</button>';
@@ -1468,68 +1439,14 @@ function openDropActionMenu(paths, destination, x, y) {
 }
 
 document.addEventListener("pointerdown", (event) => {
-  if (event.button !== 2) return;
-  const row = event.target.closest("[data-entry]");
-  const panelElement = row?.closest(".panel");
-  if (!row || !panelElement) return;
-  const side = panelElement.dataset.panel;
-  const entry = panels[side].entries[Number(row.dataset.entry)];
-  if (!entry) return;
-  const panel = panels[side];
-  rightDragCandidate = {
-    pointerId: event.pointerId,
-    side,
-    entry,
-    paths: panel.selected.has(entry.path)
-      ? getSelected(side).map((item) => item.path)
-      : [entry.path],
-    startX: event.clientX,
-    startY: event.clientY,
-    dragging: false,
-    destination: null,
-  };
+  handlePointerDown(event, panels, getSelected);
 });
 
 document.addEventListener("pointermove", (event) => {
-  const drag = rightDragCandidate;
-  if (!drag || drag.pointerId !== event.pointerId) return;
-  if (
-    !drag.dragging &&
-    Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 6
-  ) {
-    drag.dragging = true;
-    document.body.classList.add("right-dragging");
-    activeSide = drag.side;
-    const panel = panels[drag.side];
-    if (!panel.selected.has(drag.entry.path)) {
-      panel.selected.clear();
-      panel.selected.add(drag.entry.path);
-    }
-    refreshSelection();
-  }
-  if (!drag.dragging) return;
-  event.preventDefault();
-  updateRightDropTarget(event.clientX, event.clientY);
+  handlePointerMove(event, refreshSelection);
 });
 
-window.addEventListener("pointerup", (event) => {
-  const drag = rightDragCandidate;
-  if (!drag || drag.pointerId !== event.pointerId) return;
-  rightDragCandidate = null;
-  if (!drag.dragging) return;
-  document.body.classList.remove("right-dragging");
-  event.preventDefault();
-  clearRightDropTargets();
-  suppressRightContextUntil = Date.now() + 700;
-  if (drag.destination)
-    openDropActionMenu(
-      drag.paths,
-      drag.destination,
-      event.clientX,
-      event.clientY,
-    );
-  else toast("Drop on the other panel to choose an action");
-});
+window.addEventListener("pointerup", handlePointerUp);
 
 window.addEventListener("pointercancel", (event) => {
   if (rightDragCandidate?.pointerId !== event.pointerId) return;
@@ -1539,7 +1456,7 @@ window.addEventListener("pointercancel", (event) => {
 });
 
 document.addEventListener("contextmenu", (event) => {
-  if (rightDragCandidate?.dragging || Date.now() < suppressRightContextUntil) {
+  if (isDraggingCandidate() || Date.now() < getSuppressRightContextUntil()) {
     event.preventDefault();
     event.stopPropagation();
   }
@@ -1547,57 +1464,7 @@ document.addEventListener("contextmenu", (event) => {
 
 dropActionMenu.addEventListener("click", async (event) => {
   const choice = event.target.closest("[data-drop-choice]")?.dataset.dropChoice;
-  const drop = pendingRightDrop;
-  if (!choice || !drop) return;
-  dropActionMenu.hidden = true;
-  pendingRightDrop = null;
-  if (choice === "cancel") return;
-  if (choice === "shortcut") {
-    const results = await window.fileManager.createShortcuts({
-      sources: drop.paths,
-      destination: drop.destination.path,
-    });
-    const failed = results.find((item) => !item.ok);
-    await navigate(drop.destination.side, panels[drop.destination.side].path);
-    toast(
-      failed
-        ? failed.error
-        : `Created ${results.length} shortcut${results.length === 1 ? "" : "s"}`,
-    );
-    return;
-  }
-  const results = await transferWithConflicts({
-    sources: drop.paths,
-    destination: drop.destination.path,
-    operation: choice,
-  });
-  const failed = results.find(
-    (item) => !item.ok && !item.cancelled && !item.skipped,
-  );
-  const cancelled = results.some((item) => item.cancelled);
-  const skipped = results.filter((item) => item.skipped).length;
-  const succeeded = results.filter((item) => item.ok).length;
-  await Promise.all([
-    navigate("left", panels.left.path),
-    navigate("right", panels.right.path),
-  ]);
-  if (failed) toast(failed.error);
-  else if (cancelled)
-    toast(
-      succeeded
-        ? `${choice === "copy" ? "Copied" : "Moved"} ${succeeded} item${succeeded === 1 ? "" : "s"}; remaining items skipped`
-        : "Transfer cancelled",
-    );
-  else if (skipped && succeeded)
-    toast(
-      `${choice === "copy" ? "Copied" : "Moved"} ${succeeded} item${succeeded === 1 ? "" : "s"}; skipped ${skipped} existing item${skipped === 1 ? "" : "s"}`,
-    );
-  else if (skipped)
-    toast(`Skipped ${skipped} existing item${skipped === 1 ? "" : "s"}`);
-  else
-    toast(
-      `${choice === "copy" ? "Copied" : "Moved"} ${succeeded} item${succeeded === 1 ? "" : "s"}`,
-    );
+  if (choice) await executeDropAction(choice);
 });
 
 document.addEventListener("mousedown", (event) => {
@@ -2004,7 +1871,9 @@ async function initialize() {
   layoutInitialized = true;
   persistLayout();
 }
+
 initialize();
+
 window.addEventListener("focus", refreshDetectedDrives);
 
 document.querySelectorAll(".menu-trigger").forEach((trigger) => {
@@ -2020,6 +1889,7 @@ document.querySelectorAll(".menu-trigger").forEach((trigger) => {
     }
   });
 });
+
 document.addEventListener("click", (event) => {
   if (event.target.closest(".menu-group")) return;
   document.querySelectorAll(".menu-trigger").forEach((trigger) => {
@@ -2049,6 +1919,7 @@ const splitterElement = document.querySelector(".splitter");
 let panelRatio = Number.isFinite(savedLayout.panelRatio)
   ? savedLayout.panelRatio
   : 0.5;
+
 function setPanelRatio(ratio) {
   const availableWidth = Math.max(
     1,
@@ -2063,7 +1934,9 @@ function setPanelRatio(ratio) {
     String(Math.round(panelRatio * 100)),
   );
 }
+
 setPanelRatio(panelRatio);
+
 let resizingPointerId = null;
 splitterElement.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
@@ -2073,6 +1946,7 @@ splitterElement.addEventListener("pointerdown", (event) => {
   splitterElement.classList.add("is-dragging");
   splitterElement.setPointerCapture(event.pointerId);
 });
+
 splitterElement.addEventListener("pointermove", (event) => {
   if (resizingPointerId !== event.pointerId) return;
   const bounds = workspaceElement.getBoundingClientRect();
@@ -2084,6 +1958,7 @@ splitterElement.addEventListener("pointermove", (event) => {
     event.clientX - bounds.left - splitterElement.offsetWidth / 2;
   setPanelRatio(leftWidth / availableWidth);
 });
+
 function stopPanelResize(event) {
   if (resizingPointerId !== event.pointerId) return;
   resizingPointerId = null;
@@ -2092,6 +1967,7 @@ function stopPanelResize(event) {
     splitterElement.releasePointerCapture(event.pointerId);
   persistLayout();
 }
+
 splitterElement.addEventListener("pointerup", stopPanelResize);
 splitterElement.addEventListener("pointercancel", stopPanelResize);
 splitterElement.addEventListener("keydown", (event) => {
@@ -2101,4 +1977,5 @@ splitterElement.addEventListener("keydown", (event) => {
     persistLayout();
   }
 });
+
 window.addEventListener("beforeunload", persistLayout);
