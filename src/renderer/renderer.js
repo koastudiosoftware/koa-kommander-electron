@@ -1,5 +1,18 @@
 import { PanelModel } from "../models/PanelModel.js";
-import { getPanelElement } from "../utils/panel-utils.js";
+import { renderDriveButtons, renderPanel } from "../ui/panel-renderer.js";
+import {
+  escapeHtml,
+  getPanelElement,
+  formatDate,
+  formatSize,
+  icon,
+  imageExtensions,
+  kind,
+  pathParts,
+  setStatus,
+  toast,
+} from "../utils/panel-utils.js";
+
 
 // ============================================================================
 // 1. STATE INITIALIZATION & LAYOUT RESTORATION
@@ -18,7 +31,7 @@ const panels = {
 let layoutInitialized = false;
 let activeSide = "left";
 let clipboard = null;
-let toastTimer;
+
 
 // ============================================================================
 // 2. PREFERENCES & CONFIGURATION STATE
@@ -57,16 +70,17 @@ if (!Array.isArray(savedPreferences.directorySets))
   );
 delete preferences.bookmarks;
 
+
 // ============================================================================
 // 3. UI ELEMENT REFERENCES & GLOBAL MODAL STATE
 // ============================================================================
-const status = document.querySelector("#status-message");
 const summary = document.querySelector("#drive-space-summary");
 const menu = document.querySelector("#context-menu");
 const historyMenu = document.querySelector("#history-menu");
 const directorySetMenu = document.querySelector("#directory-set-menu");
 let directorySetMenuSide = null;
 let detectedDrives = [];
+
 const driveContextMenu = document.querySelector("#drive-context-menu");
 let driveContextSide = null;
 let driveContextRoot = null;
@@ -96,9 +110,11 @@ let diskSpaceTimer = null;
 let diskSpaceRequestId = 0;
 let displayedSpacePath = null;
 
+
 // ============================================================================
 // 4. STORAGE PERSISTENCE & THEME SYNC
 // ============================================================================
+
 function persistLayout() {
   if (!layoutInitialized) return;
   try {
@@ -124,6 +140,7 @@ function persistLayout() {
     /* Keep the file manager usable when storage is unavailable. */
   }
 }
+
 function persistPanelViews() {
   try {
     const layout = JSON.parse(localStorage.getItem("koa-layout") || "{}") || {};
@@ -144,6 +161,7 @@ function savePreferences() {
   localStorage.setItem("koa-settings", JSON.stringify(preferences));
   document.documentElement.dataset.theme = preferences.theme;
 }
+
 window.addEventListener("storage", (event) => {
   if (event.key !== "koa-settings") return;
   try {
@@ -166,8 +184,8 @@ window.addEventListener("storage", (event) => {
     delete preferences.bookmarks;
     document.documentElement.dataset.theme = preferences.theme;
     if (layoutInitialized) {
-      renderPanel("left");
-      renderPanel("right");
+      renderPanel("left", panels, currentActiveSide, detectedDrives, preferences);
+      renderPanel("right", panels, currentActiveSide, detectedDrives, preferences);
     }
     if (!settingsBackdrop.hidden && !directorySetDraft)
       renderSettingsCategory();
@@ -177,127 +195,18 @@ window.addEventListener("storage", (event) => {
 });
 savePreferences();
 
+
 // ============================================================================
 // 5. FORMATTERS, ICONS & UTILITIES
 // ============================================================================
-const icon = (name) => {
-  const paths = {
-    folder:
-      '<img class="svg-icon" src="../assets/material-icons_folder.svg" alt="" aria-hidden="true" draggable="false">',
-    file: '<img class="svg-icon" src="../assets/material-icons_insert_drive_file.svg" alt="" aria-hidden="true" draggable="false">',
-    image:
-      '<img class="svg-icon" src="../assets/material-icons_image.svg" alt="" aria-hidden="true" draggable="false">',
-  };
-  return `${paths[name] || paths.file}`;
-};
 
-const imageExtensions = new Set([
-  "png",
-  "jpg",
-  "jpeg",
-  "gif",
-  "webp",
-  "bmp",
-  "svg",
-  "heic",
-]);
 function isImageEntry(entry) {
   return (
     !entry.isDirectory &&
     imageExtensions.has(entry.name.split(".").pop().toLowerCase())
   );
 }
-function kind(entry) {
-  if (entry.isDirectory) return "folder";
-  const ext = entry.name.split(".").pop().toLowerCase();
-  if (imageExtensions.has(ext)) return "image";
-  if (ext === "pdf") return "pdf";
-  if (
-    [
-      "js",
-      "ts",
-      "json",
-      "html",
-      "css",
-      "py",
-      "md",
-      "yaml",
-      "yml",
-      "sh",
-      "bat",
-    ].includes(ext)
-  )
-    return "code";
-  if (["zip", "7z", "rar", "tar", "gz"].includes(ext)) return "archive";
-  return "file";
-}
-function formatSize(size, directory) {
-  if (directory) return "—";
-  if (!size) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const n = Math.min(
-    Math.floor(Math.log(size) / Math.log(1024)),
-    units.length - 1,
-  );
-  return `${(size / 1024 ** n).toFixed(n === 0 ? 0 : 1)} ${units[n]}`;
-}
-function formatDate(iso) {
-  if (!iso) return "—";
-  const date = new Date(iso);
-  const year = String(date.getFullYear());
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const dateText =
-    {
-      us: `${month}/${day}/${year}`,
-      eu: `${day}/${month}/${year}`,
-      "iso-dash": `${year}-${month}-${day}`,
-      "iso-slash": `${year}/${month}/${day}`,
-    }[preferences.dateFormat] || `${month}/${day}/${year}`;
-  const hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  let timeText;
-  if (preferences.timeFormat === "24h") timeText = `${hours}:${minutes}`;
-  else if (preferences.timeFormat === "24h-padded")
-    timeText = `${String(hours).padStart(2, "0")}:${minutes}`;
-  else timeText = `${hours % 12 || 12}:${minutes} ${hours >= 12 ? "PM" : "AM"}`;
-  return `${dateText} ${timeText}`;
-}
-function escapeHtml(text) {
-  return String(text).replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ],
-  );
-}
-function pathParts(fullPath) {
-  const parsedRoot =
-    fullPath.match(/^(?:[A-Za-z]:\\|\\\\[^\\]+\\[^\\]+|\/)/)?.[0] || "";
-  const rest = fullPath.slice(parsedRoot.length).split(/[\\/]/).filter(Boolean);
-  let current = parsedRoot;
-  const result = [
-    { label: parsedRoot || fullPath, path: parsedRoot || fullPath },
-  ];
-  for (const part of rest) {
-    current = current
-      ? `${current.replace(/[\\/]$/, "")}${fullPath.includes("\\") ? "\\" : "/"}${part}`
-      : part;
-    result.push({ label: part, path: current });
-  }
-  return result;
-}
-function setStatus(message) {
-  status.textContent = message;
-}
-function toast(message) {
-  const el = document.querySelector("#toast");
-  el.textContent = message;
-  el.classList.add("visible");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("visible"), 2400);
-}
+
 
 // ============================================================================
 // 6. PROPERTIES & FOLDER SIZE SCANNING
@@ -319,9 +228,9 @@ function showProperties(properties) {
           ["Folders", "Counting…"],
         ]
       : []),
-    ["Created", formatDate(properties.created)],
-    ["Modified", formatDate(properties.modified)],
-    ["Accessed", formatDate(properties.accessed)],
+    ["Created", formatDate(properties.created, preferences)],
+    ["Modified", formatDate(properties.modified, preferences)],
+    ["Accessed", formatDate(properties.accessed, preferences)],
   ];
   document.querySelector("#properties-title").textContent =
     `${properties.name} Properties`;
@@ -476,7 +385,7 @@ function conflictObjectCard(label, item, choice, actionLabel, primary = false) {
   const attributes = choice
     ? `type="button" data-conflict-choice="${choice}"`
     : "";
-  return `<${tag} class="conflict-object-choice ${primary ? "primary" : ""}" ${attributes}><div class="conflict-object-heading">${label}</div><div class="conflict-object-name"><span class="file-icon ${kind(item)}">${icon(kind(item))}</span><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong></div><dl><div><dt>Type</dt><dd>${item.isDirectory ? "Folder" : "File"}</dd></div><div><dt>Size</dt><dd>${formatSize(item.size, item.isDirectory)}</dd></div><div><dt>Modified</dt><dd>${formatDate(item.modified)}</dd></div></dl><div class="conflict-object-path" title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</div><div class="conflict-object-action">${actionLabel || "Choose Rename below for this item type"}</div></${tag}>`;
+  return `<${tag} class="conflict-object-choice ${primary ? "primary" : ""}" ${attributes}><div class="conflict-object-heading">${label}</div><div class="conflict-object-name"><span class="file-icon ${kind(item)}">${icon(kind(item))}</span><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong></div><dl><div><dt>Type</dt><dd>${item.isDirectory ? "Folder" : "File"}</dd></div><div><dt>Size</dt><dd>${formatSize(item.size, item.isDirectory)}</dd></div><div><dt>Modified</dt><dd>${formatDate(item.modified, preferences)}</dd></div></dl><div class="conflict-object-path" title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</div><div class="conflict-object-action">${actionLabel || "Choose Rename below for this item type"}</div></${tag}>`;
 }
 function askTransferConflict(conflict) {
   return new Promise((resolve) => {
@@ -590,7 +499,7 @@ async function navigate(
       panel.historyIndex = 0;
     }
     panel.selected.clear();
-    renderPanel(side);
+    renderPanel(side, panels, currentActiveSide, detectedDrives, preferences);
     persistLayout();
     setStatus("Ready");
     return true;
@@ -603,47 +512,7 @@ async function navigate(
   }
 }
 
-function panelChrome(side) {
-  const panel = panels[side];
-  const parts = panel.path ? pathParts(panel.path) : [];
-  const crumbs = parts
-    .map((part, index) => {
-      const label =
-        index === 0 && /^[A-Za-z]:\\$/.test(part.label)
-          ? part.label.slice(0, 2)
-          : part.label;
-      return `<span class="crumb" data-crumb="${index}">${escapeHtml(label)}</span>${index < parts.length - 1 ? '<span class="crumb-sep">›</span>' : ""}`;
-    })
-    .join("");
-  return `<div class="panel-top">
-    <div class="pathbar"><button class="path-home" data-action="home" title="Go to Home folder" aria-label="Go to Home folder">⌂</button>${crumbs}</div>
-  </div>
-  <div class="toolbar">
-    <button class="toolbar-button icon-only" data-action="up" aria-label="Go up one folder" title="Go up one folder">${actionIcon("up")}</button>
-    <button class="toolbar-button icon-only" data-action="refresh" aria-label="Refresh" title="Refresh">${actionIcon("refresh")}</button>
-    <span class="toolbar-divider" aria-hidden="true"></span>
-    <span class="drive-button-group" data-drive-buttons>${renderDriveButtons(side)}</span>
-    <span class="toolbar-spacer"></span>
-    ${panel.view === "icons" ? `<label class="size-control" title="Thumbnail size"><span data-size-value>${panel.iconSize}</span><input type="range" min="32" max="160" step="8" value="${panel.iconSize}" data-action="icon-size" aria-label="Thumbnail size"></label>` : ""}
-    <div class="view-group" role="group" aria-label="Panel view">
-      <button class="view-button ${panel.view === "details" ? "active" : ""}" data-view="details" title="Details" aria-label="Details view" aria-pressed="${panel.view === "details"}">${gridIcon("details")}</button>
-      <button class="view-button ${panel.view === "icons" ? "active" : ""}" data-view="icons" title="Thumbnails" aria-label="Thumbnail view" aria-pressed="${panel.view === "icons"}">${gridIcon("icons")}</button>
-    </div>
-    <button class="toolbar-button directory-set-trigger" data-action="directory-sets" aria-label="Open a saved directory set" aria-expanded="false" title="Directory sets">${actionIcon("sets")}<span>Sets</span></button>
-    <button class="toolbar-button icon-only" data-action="match-other" aria-label="${side === "left" ? "Match right panel folder" : "Match left panel folder"}" title="${side === "left" ? "Go to right panel folder" : "Go to left panel folder"}">${actionIcon(side === "left" ? "left" : "right")}</button>
-  </div>`;
-}
-function renderDriveButtons(side) {
-  return detectedDrives
-    .map((drive) => {
-      const isCurrent = panels[side].path
-        ?.toLowerCase()
-        .startsWith(drive.path.toLowerCase());
-      const title = `${drive.name}${drive.label ? ` — ${drive.label}` : ""}${drive.canEject ? " (Removable)" : ""}`;
-      return `<button class="toolbar-button drive-button ${isCurrent ? "active" : ""}" data-drive-button="${escapeHtml(drive.path)}" aria-label="Open ${escapeHtml(drive.name)}${drive.label ? `, ${escapeHtml(drive.label)}` : ""}" aria-pressed="${Boolean(isCurrent)}" title="${escapeHtml(title)}">${escapeHtml(drive.name)}</button>`;
-    })
-    .join("");
-}
+
 async function refreshDetectedDrives() {
   try {
     detectedDrives = await window.fileManager.roots();
@@ -656,7 +525,7 @@ function refreshDriveButtonGroups() {
   for (const side of ["left", "right"]) {
     const group = getPanelElement(side).querySelector("[data-drive-buttons]");
     if (!group) continue;
-    group.innerHTML = renderDriveButtons(side);
+    group.innerHTML = renderDriveButtons(detectedDrives, side, panels);
     bindDriveButtons(side);
   }
 }
@@ -805,7 +674,7 @@ function editPanelPath(side) {
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      renderPanel(side);
+      renderPanel(side, panels, currentActiveSide, detectedDrives, preferences);
     } else if (event.key === "Enter") {
       event.preventDefault();
       event.stopPropagation();
@@ -831,47 +700,14 @@ function editPanelPath(side) {
       input.isConnected &&
       !pathbar.classList.contains("is-invalid")
     )
-      renderPanel(side);
+      renderPanel(side, panels, currentActiveSide, detectedDrives, preferences);
   });
 }
-
-function gridIcon(type) {
-  return type === "details"
-    ? '<img class="svg-icon" src="../assets/bootstrap-list-task.svg" alt="" aria-hidden="true" draggable="false">'
-    : '<img class="svg-icon" src="../assets/material-icons_grid_view.svg" alt="" aria-hidden="true" draggable="false">';
-}
-
-const actionIcon = (name) => {
-  const paths = {
-    sets: '<img class="svg-icon" src="../assets/material-icons_folder_special.svg" alt="" aria-hidden="true" draggable="false">',
-    "new-folder":
-      '<img class="svg-icon" src="../assets/material-icons_create_new_folder.svg" alt="" aria-hidden="true" draggable="false">',
-    up: '<img class="svg-icon" src="../assets/material-icons_arrow_upward.svg" alt="" aria-hidden="true" draggable="false">',
-    refresh:
-      '<img class="svg-icon" src="../assets/material-icons_refresh.svg" alt="" aria-hidden="true" draggable="false">',
-    left: '<img class="svg-icon" src="../assets/material-icons_keyboard_arrow_left.svg" alt="" aria-hidden="true" draggable="false">',
-    right:
-      '<img class="svg-icon" src="../assets/material-icons_keyboard_arrow_right.svg" alt="" aria-hidden="true" draggable="false">',
-    copy: '<img class="svg-icon" src="../assets/material-icons_file_copy.svg" alt="" aria-hi  dden="true" draggable="false">',
-    cut: '<img class="svg-icon" src="../assets/material-icons_content_cut.svg" alt="" aria-hidden="true" draggable="false">',
-    paste:
-      '<img class="svg-icon" src="../assets/material-icons_content_paste.svg" alt="" aria-hidden="true" draggable="false">',
-    rename:
-      '<img class="svg-icon" src="../assets/material-icons_drive_file_rename_outline.svg" alt="" aria-hidden="true" draggable="false">',
-    delete:
-      '<img class="svg-icon" src="../assets/material-icons_delete.svg" alt="" aria-hidden="true" draggable="false">',
-  };
-  return `${paths[name]}`;
-};
 
 // ============================================================================
 // 10. ENTRIES RENDERING & SEARCH ENGINE
 // ============================================================================
-function entryAttributes(entry, side, index, tile = false) {
-  const cls = kind(entry);
-  const selected = panels[side].selected.has(entry.path);
-  return `${tile ? 'class="icon-tile' : 'class="file-row'} ${selected ? "selected" : ""}" data-entry="${index}" draggable="true" tabindex="0"`;
-}
+
 function searchLocation(entry, panel) {
   if (!panel.searchRoot) return "";
   const relative = entry.path
@@ -881,81 +717,6 @@ function searchLocation(entry, panel) {
     .slice(0, -1)
     .join(" › ");
   return relative || ".";
-}
-function renderEntries(side) {
-  const panel = panels[side];
-  if (panel.view === "details") {
-    const visibleEntries = panel.entries.filter(
-      (entry) => preferences.showHidden || !entry.name.startsWith("."),
-    );
-    const sortedEntries = [...visibleEntries].sort((a, b) => {
-      let comparison = 0;
-      if (preferences.groupFolders && a.isDirectory !== b.isDirectory)
-        return a.isDirectory ? -1 : 1;
-      if (panel.sortBy === "name")
-        comparison = a.name.localeCompare(b.name, undefined, {
-          numeric: true,
-          sensitivity: "base",
-        });
-      else if (panel.sortBy === "size")
-        comparison = (a.size || 0) - (b.size || 0);
-      else
-        comparison =
-          new Date(a.modified || 0).getTime() -
-          new Date(b.modified || 0).getTime();
-      return comparison * (panel.sortDirection === "asc" ? 1 : -1);
-    });
-    const rows = sortedEntries
-      .map((entry) => {
-        const index = panel.entries.indexOf(entry);
-        return `<tr ${entryAttributes(entry, side, index)}><td><div class="name-cell"><span class="file-icon ${kind(entry)}">${icon(kind(entry))}</span><span class="search-result-label"><span class="file-name" title="${escapeHtml(entry.path)}">${escapeHtml(entry.name)}</span>${panel.searchRoot ? `<span class="search-result-location">${escapeHtml(searchLocation(entry, panel))}</span>` : ""}</span></div></td><td>${formatSize(entry.size, entry.isDirectory)}</td><td class="date-cell">${formatDate(entry.modified)}</td></tr>`;
-      })
-      .join("");
-    const colgroup = panel.columns
-      .map((width) => `<col style="width:${width}%">`)
-      .join("");
-    const heading = (key, label, boundary = null) =>
-      `<th><button class="column-sort" data-sort="${key}">${label}${panel.sortBy === key ? `<span class="sort-arrow" aria-label="sorted ${panel.sortDirection === "asc" ? "ascending" : "descending"}">${panel.sortDirection === "asc" ? "▲" : "▼"}</span>` : ""}</button>${boundary === null ? "" : `<span class="column-grip" data-column-boundary="${boundary}" title="Resize ${label} column" aria-label="Resize ${label} column"></span>`}</th>`;
-    const emptyState = visibleEntries.length
-      ? ""
-      : `<div class="empty-state">${icon("folder")}<strong>${panel.searchRoot ? "No matches found" : panel.entries.length ? "No visible items" : "This folder is empty"}</strong><span>${panel.searchRoot ? `Search: ${escapeHtml(document.querySelector("#search-query").value)}` : panel.entries.length ? "Hidden items are not shown" : "Drop files here to add them"}</span></div>`;
-    return `<div class="file-area"><table class="file-list" style="--name-width:${panel.columns[0]}%;--size-width:${panel.columns[1]}%;--date-width:${panel.columns[2]}%"><colgroup>${colgroup}</colgroup><thead><tr>${heading("name", "Name", 0)}${heading("size", "Size", 1)}${heading("modified", "Date modified")}</tr></thead><tbody>${rows}</tbody></table>${emptyState}</div>`;
-  }
-  const tileSize = panel.iconSize + 48;
-  const visibleEntries = panel.entries.filter(
-    (entry) => preferences.showHidden || !entry.name.startsWith("."),
-  );
-  const orderedEntries = [...visibleEntries].sort((a, b) => {
-    if (preferences.groupFolders && a.isDirectory !== b.isDirectory)
-      return a.isDirectory ? -1 : 1;
-    return a.name.localeCompare(b.name, undefined, {
-      numeric: true,
-      sensitivity: "base",
-    });
-  });
-  const tiles = orderedEntries
-    .map(
-      (entry) =>
-        `<div ${entryAttributes(entry, side, panel.entries.indexOf(entry), true)} style="width:${tileSize}px;height:${tileSize}px"><div class="tile-visual ${kind(entry)}" style="width:${panel.iconSize}px;height:${panel.iconSize}px">${icon(kind(entry))}</div><div class="tile-name" title="${escapeHtml(entry.path)}">${escapeHtml(entry.name)}${panel.searchRoot ? `<span class="search-result-location">${escapeHtml(searchLocation(entry, panel))}</span>` : ""}</div></div>`,
-    )
-    .join("");
-  return `<div class="file-area"><div class="icon-grid" style="--tile-width:${tileSize}px">${tiles}</div>${visibleEntries.length ? "" : '<div class="empty-state">' + icon("folder") + `<strong>${panel.searchRoot ? "No matches found" : "This folder is empty"}</strong><span>${panel.searchRoot ? "Try another name or pattern" : "Drop files here to add them"}</span>` + "</div>"}</div>`;
-}
-function renderPanel(side, { loadThumbnails = true } = {}) {
-  const panel = panels[side];
-  const panelEl = getPanelElement(side);
-  const thumbnailGeneration = ++panel.thumbnailGeneration;
-
-  if (!panelEl) return;
-
-  panelEl.classList.toggle("is-active", currentActiveSide === side);
-  panelEl.innerHTML = `${panelChrome(side)}${renderEntries(side)}<div class="panel-bottom">${panelStatus(panel)}</div>`;
-  if (panel.view === "icons") {
-    applyThumbnailSize(panel);
-    if (loadThumbnails) loadThumbnailImages(side, thumbnailGeneration);
-  }
-  bindPanel(side);
-  updateSummary();
 }
 
 const searchForm = document.querySelector("#global-search");
@@ -985,7 +746,7 @@ async function runPanelSearch() {
   panel.selected.clear();
   updateSearchControl();
   setStatus("Searching file names…");
-  renderPanel(side);
+  renderPanel(side, panels, currentActiveSide, detectedDrives, preferences);
   try {
     const result = await window.fileManager.search({
       searchId,
@@ -1005,7 +766,7 @@ async function runPanelSearch() {
     );
     panel.selected.clear();
     updateSearchControl();
-    renderPanel(side);
+    renderPanel(side, panels, currentActiveSide, detectedDrives, preferences);
     setStatus(
       result.cancelled
         ? `Search cancelled · ${result.results.length} matches`
@@ -1041,7 +802,7 @@ window.fileManager.onSearchProgress(
           sensitivity: "base",
         }),
       );
-      renderPanel(side, { loadThumbnails: false });
+      renderPanel(side, panels, currentActiveSide, detectedDrives, preferences, { loadThumbnails: false });
     }, 120);
   },
 );
@@ -1096,12 +857,10 @@ async function loadThumbnailImages(side, generation) {
   const panel = panels[side];
   const panelEl = getPanelElement(side); // Uses panel.side stored in the model
   if (!panelEl) return;
-  const tiles = [...panelEl.querySelectorAll(".icon-tile")].filter(
-    (tile) => {
-      const entry = panel.entries[Number(tile.dataset.entry)];
-      return entry && isImageEntry(entry);
-    },
-  );
+  const tiles = [...panelEl.querySelectorAll(".icon-tile")].filter((tile) => {
+    const entry = panel.entries[Number(tile.dataset.entry)];
+    return entry && isImageEntry(entry);
+  });
   let nextIndex = 0;
   const loadNext = async () => {
     while (
@@ -1165,17 +924,6 @@ function updateSummary() {
       displayedSpacePath = directory;
     }
   }, 120);
-}
-function panelStatus(panel) {
-  const selectedCount = panel.selected.size;
-  const selectedFiles = panel.entries.filter(
-    (entry) => panel.selected.has(entry.path) && !entry.isDirectory,
-  );
-  const fileBytes = selectedFiles.reduce(
-    (sum, entry) => sum + (entry.size || 0),
-    0,
-  );
-  return `<strong>${selectedCount || panel.entries.length}</strong>&nbsp;${selectedCount ? "selected" : panel.searchRoot ? "matches" : "items"}<span class="bottom-spacer"></span>${selectedCount && selectedFiles.length ? `<span class="panel-selection-size">${formatSize(fileBytes, false)}</span>` : ""}`;
 }
 function updateHistoryButtons() {
   const panel = panels[activeSide];
@@ -1290,7 +1038,7 @@ window.fileManager.onDirectoryChanged(({ side, directory }) => {
         if (!availablePaths.has(selectedPath))
           panel.selected.delete(selectedPath);
       }
-      renderPanel(side);
+      renderPanel(side, panels, currentActiveSide, detectedDrives, preferences);
     })
     .catch(() => {});
 });
@@ -1569,7 +1317,7 @@ function bindPanel(side) {
       if (panel.view === view) return;
       panel.view = view;
       activeSide = side;
-      renderPanel(side);
+      renderPanel(side, panels, currentActiveSide, detectedDrives, preferences);
       persistPanelViews();
       persistLayout();
     }),
@@ -1599,7 +1347,7 @@ function bindPanel(side) {
         panel.sortBy = column;
         panel.sortDirection = "asc";
       }
-      renderPanel(side);
+      renderPanel(side, panels, currentActiveSide, detectedDrives, preferences);
     }),
   );
   panelEl.querySelectorAll("[data-column-boundary]").forEach((grip) => {
@@ -2411,15 +2159,15 @@ settingsContent.addEventListener("change", (event) => {
     control.dataset.preference === "showHidden" ||
     control.dataset.preference === "groupFolders"
   ) {
-    renderPanel("left");
-    renderPanel("right");
+    renderPanel("left", panels, currentActiveSide, detectedDrives, preferences);
+    renderPanel("right", panels, currentActiveSide, detectedDrives, preferences);
   }
   if (
     control.dataset.preference === "dateFormat" ||
     control.dataset.preference === "timeFormat"
   ) {
-    renderPanel("left");
-    renderPanel("right");
+    renderPanel("left", panels, currentActiveSide, detectedDrives, preferences);
+    renderPanel("right", panels, currentActiveSide, detectedDrives, preferences);
   }
 });
 settingsContent.addEventListener("dragstart", (event) => {
