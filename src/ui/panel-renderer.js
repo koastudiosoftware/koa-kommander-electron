@@ -182,7 +182,7 @@ function panelChrome(side, panels, detectedDrives) {
  * @param {Object} panel
  * @returns {string} HTML string representing the panel status, including selected count and total size of selected files.
  */
-function panelStatus(panel) {
+export function panelStatus(panel) {
   console.log(`Rendering panel status for path: ${panel.path}, selected count: ${panel.selected.size}`);
   const selectedCount = panel.selected.size;
   const selectedFiles = panel.entries.filter(

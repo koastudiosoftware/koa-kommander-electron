@@ -1,5 +1,5 @@
 import { PanelModel } from "../models/PanelModel.js";
-import { renderDriveButtons, renderPanel } from "../ui/panel-renderer.js";
+import { renderDriveButtons, panelStatus, renderPanel } from "../ui/panel-renderer.js";
 import {
   escapeHtml,
   getPanelElement,
@@ -21,6 +21,30 @@ import {
   renameSelection,
   transferWithConflicts,
 } from "../ui/context-menu-service.js";
+import {
+  initDialogsService,
+  makeDialogDraggable,
+  showProperties,
+  closeProperties,
+  cancelFolderSizeScan,
+  askTransferConflict,
+  finishConflictDecision,
+  askForName,
+  finishNameDialog,
+} from "../ui/dialogs-service.js";
+
+import {
+  initSettingsService,
+  openSettings,
+  closeSettings,
+  renderSettingsCategory,
+  showDirectorySetMenu,
+  closeDirectorySetMenu,
+  openDirectorySet,
+  renderDirectorySets,
+  switchCategory,
+} from "../ui/settings-service.js";
+
 
 // ============================================================================
 // 1. STATE INITIALIZATION & LAYOUT RESTORATION
@@ -133,6 +157,24 @@ let diskSpaceTimer = null;
 let diskSpaceRequestId = 0;
 let displayedSpacePath = null;
 
+// must come after settingsBackdrop is defined
+initSettingsService({
+  preferences: () => preferences,
+  panels,
+  getActiveSide: () => activeSide,
+  setActiveSide: (side) => {
+    activeSide = side;
+  },
+  navigate,
+  savePreferences,
+  renderPanel,
+  currentActiveSide,
+  detectedDrives: () => detectedDrives,
+  settingsBackdrop,
+  settingsContent,
+  directorySetMenu,
+});
+
 
 // ============================================================================
 // 4. STORAGE PERSISTENCE & THEME SYNC
@@ -232,164 +274,37 @@ function isImageEntry(entry) {
 
 
 // ============================================================================
-// 6. PROPERTIES & FOLDER SIZE SCANNING
+// 6, 7, 8. DIALOGS, PROPERTIES & CONFLICT RESOLUTION
 // ============================================================================
 
-function showProperties(properties) {
-  cancelFolderSizeScan();
-  const rows = [
-    ["Type", properties.type],
-    ["Location", properties.location],
-    [
-      "Size",
-      properties.isDirectory
-        ? "Calculating…"
-        : formatSize(properties.size, false),
-    ],
-    ...(properties.isDirectory
-      ? [
-          ["Files", "Counting…"],
-          ["Folders", "Counting…"],
-        ]
-      : []),
-    ["Created", formatDate(properties.created, preferences)],
-    ["Modified", formatDate(properties.modified, preferences)],
-    ["Accessed", formatDate(properties.accessed, preferences)],
-  ];
-  document.querySelector("#properties-title").textContent =
-    `${properties.name} Properties`;
-  const rowIds = {
-    Size: "properties-size",
-    Files: "properties-file-count",
-    Folders: "properties-folder-count",
-  };
-  document.querySelector("#properties-content").innerHTML =
-    `<div class="properties-name">${escapeHtml(properties.name)}</div><dl class="properties-list">${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd ${rowIds[label] ? `id="${rowIds[label]}"` : ""} title="${escapeHtml(value)}">${escapeHtml(value)}</dd></div>`).join("")}</dl><div class="properties-scan-footer" ${properties.isDirectory ? "" : "hidden"}><span id="properties-scan-status">Preparing folder scan…</span><button class="settings-secondary" id="properties-cancel-scan" type="button">Cancel calculation</button></div>`;
-  propertiesBackdrop.hidden = false;
-  document.querySelector("#properties-close").focus();
-  if (properties.isDirectory) startFolderSizeScan(properties.path);
-}
-
-function cancelFolderSizeScan() {
-  if (!activeFolderSizeRequest) return;
-  window.fileManager.cancelFolderSize(activeFolderSizeRequest);
-  activeFolderSizeRequest = null;
-}
-
-function closeProperties() {
-  cancelFolderSizeScan();
-  propertiesBackdrop.hidden = true;
-}
-
-async function startFolderSizeScan(itemPath) {
-  const requestId =
-    globalThis.crypto?.randomUUID?.() ||
-    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  activeFolderSizeRequest = requestId;
-  const size = document.querySelector("#properties-size");
-  const scanStatus = document.querySelector("#properties-scan-status");
-  const cancelButton = document.querySelector("#properties-cancel-scan");
-  const setStatus = (text) => {
-    if (scanStatus) scanStatus.textContent = text;
-  };
-  try {
-    const result = await window.fileManager.folderSize({ requestId, itemPath });
-    if (activeFolderSizeRequest !== requestId) return;
-    if (result.cancelled) {
-      size.textContent = "Cancelled";
-      document.querySelector("#properties-file-count").textContent =
-        "Cancelled";
-      document.querySelector("#properties-folder-count").textContent =
-        "Cancelled";
-      setStatus("Folder size calculation cancelled.");
-    } else {
-      size.textContent = formatSize(result.totalBytes, false);
-      document.querySelector("#properties-file-count").textContent = String(
-        result.fileCount,
-      );
-      document.querySelector("#properties-folder-count").textContent = String(
-        result.folderCount,
-      );
-      setStatus(
-        `Scanned ${result.fileCount} files and ${result.folderCount} folders.`,
-      );
-    }
-    cancelButton.hidden = true;
-  } catch (error) {
-    if (activeFolderSizeRequest !== requestId) return;
-    size.textContent = "Unavailable";
-    document.querySelector("#properties-file-count").textContent =
-      "Unavailable";
-    document.querySelector("#properties-folder-count").textContent =
-      "Unavailable";
-    setStatus(`Could not calculate folder size: ${error.message}`);
-    cancelButton.hidden = true;
-  } finally {
-    if (activeFolderSizeRequest === requestId) activeFolderSizeRequest = null;
-  }
-}
-
-window.fileManager.onFolderSizeProgress((progress) => {
-  if (
-    progress.requestId !== activeFolderSizeRequest ||
-    propertiesBackdrop.hidden
-  )
-    return;
-  document.querySelector("#properties-size").textContent =
-    `${formatSize(progress.totalBytes, false)} so far`;
-  document.querySelector("#properties-file-count").textContent = String(
-    progress.fileCount,
-  );
-  document.querySelector("#properties-folder-count").textContent = String(
-    progress.folderCount,
-  );
-  document.querySelector("#properties-scan-status").textContent =
-    "Calculating folder size and contents…";
+// Initialize the dialogs service with DOM elements and preferences
+initDialogsService({
+  preferences: () => preferences,
+  propertiesBackdrop,
+  conflictBackdrop,
+  conflictItems,
+  conflictActions,
+  conflictRename,
+  conflictRenameInput,
+  nameDialogBackdrop,
+  nameDialogInput
 });
 
+// Folder size progress listener (relies on activeFolderSizeRequest from service)
+window.fileManager.onFolderSizeProgress((progress) => {
+  if (propertiesBackdrop.hidden) return;
+  const sizeEl = document.querySelector("#properties-size");
+  const fileCountEl = document.querySelector("#properties-file-count");
+  const folderCountEl = document.querySelector("#properties-folder-count");
+  const scanStatusEl = document.querySelector("#properties-scan-status");
 
-// ============================================================================
-// 7. DIALOG DRAG & DROP UTILITIES
-// ============================================================================
+  if (sizeEl) sizeEl.textContent = `${formatSize(progress.totalBytes, false)} so far`;
+  if (fileCountEl) fileCountEl.textContent = String(progress.fileCount);
+  if (folderCountEl) folderCountEl.textContent = String(progress.folderCount);
+  if (scanStatusEl) scanStatusEl.textContent = "Calculating folder size and contents…";
+});
 
-function makeDialogDraggable(dialogSelector, handleSelector) {
-  const dialog = document.querySelector(dialogSelector);
-  const handle = dialog?.querySelector(handleSelector);
-  if (!dialog || !handle) return;
-  handle.addEventListener("pointerdown", (event) => {
-    if (
-      event.button !== 0 ||
-      event.target.closest("button,input,select,textarea,a")
-    )
-      return;
-    event.preventDefault();
-    const rect = dialog.getBoundingClientRect();
-    dialog.style.position = "fixed";
-    dialog.style.left = `${rect.left}px`;
-    dialog.style.top = `${rect.top}px`;
-    dialog.style.margin = "0";
-    dialog.style.transform = "none";
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const startLeft = rect.left;
-    const startTop = rect.top;
-    handle.setPointerCapture(event.pointerId);
-    const move = (moveEvent) => {
-      const maxLeft = Math.max(8, window.innerWidth - dialog.offsetWidth - 8);
-      const maxTop = Math.max(8, window.innerHeight - dialog.offsetHeight - 8);
-      dialog.style.left = `${Math.min(maxLeft, Math.max(8, startLeft + moveEvent.clientX - startX))}px`;
-      dialog.style.top = `${Math.min(maxTop, Math.max(8, startTop + moveEvent.clientY - startY))}px`;
-    };
-    const finish = () => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", finish);
-      handle.removeEventListener("pointercancel", finish);
-    };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", finish, { once: true });
-    handle.addEventListener("pointercancel", finish, { once: true });
-  });
-}
+// Make dialogs draggable
 [
   [".settings-dialog", ".settings-header"],
   [".conflict-dialog", ".conflict-header"],
@@ -400,67 +315,14 @@ function makeDialogDraggable(dialogSelector, handleSelector) {
   makeDialogDraggable(dialogSelector, handleSelector),
 );
 
-// ============================================================================
-// 8. CONFLICT RESOLUTION & TRANSFER DIALOGS
-// ============================================================================
-function suggestedCopyName(name) {
-  const extensionAt = name.lastIndexOf(".");
-  const hasExtension = extensionAt > 0;
-  const stem = hasExtension ? name.slice(0, extensionAt) : name;
-  const extension = hasExtension ? name.slice(extensionAt) : "";
-  return `${stem} (1)${extension}`;
-}
-function conflictObjectCard(label, item, choice, actionLabel, primary = false) {
-  const tag = choice ? "button" : "article";
-  const attributes = choice
-    ? `type="button" data-conflict-choice="${choice}"`
-    : "";
-  return `<${tag} class="conflict-object-choice ${primary ? "primary" : ""}" ${attributes}><div class="conflict-object-heading">${label}</div><div class="conflict-object-name"><span class="file-icon ${kind(item)}">${icon(kind(item))}</span><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong></div><dl><div><dt>Type</dt><dd>${item.isDirectory ? "Folder" : "File"}</dd></div><div><dt>Size</dt><dd>${formatSize(item.size, item.isDirectory)}</dd></div><div><dt>Modified</dt><dd>${formatDate(item.modified, preferences)}</dd></div></dl><div class="conflict-object-path" title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</div><div class="conflict-object-action">${actionLabel || "Choose Rename below for this item type"}</div></${tag}>`;
-}
-function askTransferConflict(conflict) {
-  return new Promise((resolve) => {
-    resolveConflictDecision = resolve;
-    const incoming = conflict.sourceInfo;
-    const existing = conflict.targetInfo;
-    const bothFiles = !incoming.isDirectory && !existing.isDirectory;
-    const bothFolders = incoming.isDirectory && existing.isDirectory;
-    const newChoice = bothFiles ? "overwrite" : bothFolders ? "merge" : null;
-    const newAction = bothFiles
-      ? "Overwrite the existing file"
-      : bothFolders
-        ? "Merge folders · matching files are replaced"
-        : null;
-    conflictItems.innerHTML = `${conflictObjectCard("New item", incoming, newChoice, newAction, Boolean(newChoice))}${conflictObjectCard("Old item", existing, "skip", "Keep the existing item")}`;
-    conflictActions.innerHTML =
-      '<button class="conflict-choice" data-conflict-choice="rename">Rename incoming item</button><button class="conflict-choice cancel" data-conflict-choice="cancel">Cancel operation</button>';
-    conflictRename.hidden = true;
-    const candidate = suggestedCopyName(
-      pathParts(conflict.target).at(-1)?.label || incoming.name,
-    );
-    conflictRenameInput.value = candidate;
-    conflictBackdrop.hidden = false;
-    (
-      conflictItems.querySelector(".primary") ||
-      conflictItems.querySelector("[data-conflict-choice]") ||
-      conflictActions.querySelector('[data-conflict-choice="rename"]')
-    )?.focus();
-  });
-}
-function finishConflictDecision(decision) {
-  if (!resolveConflictDecision) return;
-  const resolve = resolveConflictDecision;
-  resolveConflictDecision = null;
-  conflictBackdrop.hidden = true;
-  resolve(decision);
-}
+// Conflict resolution DOM event bindings
 conflictItems.addEventListener("click", (event) => {
-  const choice = event.target.closest("[data-conflict-choice]")?.dataset
-    .conflictChoice;
+  const choice = event.target.closest("[data-conflict-choice]")?.dataset.conflictChoice;
   if (choice) finishConflictDecision({ choice });
 });
+
 conflictActions.addEventListener("click", (event) => {
-  const choice = event.target.closest("[data-conflict-choice]")?.dataset
-    .conflictChoice;
+  const choice = event.target.closest("[data-conflict-choice]")?.dataset.conflictChoice;
   if (!choice) return;
   if (choice === "rename") {
     conflictRename.hidden = false;
@@ -470,16 +332,16 @@ conflictActions.addEventListener("click", (event) => {
   }
   finishConflictDecision({ choice });
 });
-document
-  .querySelector("[data-conflict-confirm-rename]")
-  .addEventListener("click", () => {
-    const name = conflictRenameInput.value.trim();
-    if (!name || name === "." || name === ".." || /[\\/]/.test(name)) {
-      toast("Enter a valid file name");
-      return;
-    }
-    finishConflictDecision({ choice: "rename", name });
-  });
+
+document.querySelector("[data-conflict-confirm-rename]").addEventListener("click", () => {
+  const name = conflictRenameInput.value.trim();
+  if (!name || name === "." || name === ".." || /[\\/]/.test(name)) {
+    toast("Enter a valid file name");
+    return;
+  }
+  finishConflictDecision({ choice: "rename", name });
+});
+
 conflictRenameInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
@@ -1072,6 +934,7 @@ window.fileManager.onDirectoryChanged(({ side, directory }) => {
     })
     .catch(() => {});
 });
+
 document.addEventListener("auxclick", (event) => {
   if (event.button !== 3 && event.button !== 4) return;
   event.preventDefault();
@@ -1079,107 +942,11 @@ document.addEventListener("auxclick", (event) => {
   moveHistory(activeSide, event.button === 3 ? -1 : 1);
 });
 
+
 // ============================================================================
 // 12. DIRECTORY SETS, BOOKMARKS & SETTINGS MODAL
 // ============================================================================
-function directorySetLabel(set) {
-  if (set.name?.trim()) return set.name.trim();
-  if (set.type === "pair")
-    return `${bookmarkLabel(set.leftPath)} ↔ ${bookmarkLabel(set.rightPath)}`;
-  return bookmarkLabel(set.path);
-}
-function bookmarkLabel(directory = "") {
-  return directory.split(/[\\/]/).filter(Boolean).at(-1) || directory;
-}
-function directorySetDetails(set) {
-  if (set.type === "pair")
-    return [
-      ["Left", set.leftPath],
-      ["Right", set.rightPath],
-    ];
-  const target =
-    set.openIn === "left"
-      ? "Left"
-      : set.openIn === "right"
-        ? "Right"
-        : "Active";
-  return [[target, set.path]];
-}
-function orderedDirectorySets() {
-  const items = preferences.directorySets.map((set, index) => ({ set, index }));
-  if (preferences.directorySetSort === "alphabetical") {
-    items.sort((a, b) =>
-      directorySetLabel(a.set).localeCompare(
-        directorySetLabel(b.set),
-        undefined,
-        { numeric: true, sensitivity: "base" },
-      ),
-    );
-  }
-  return items;
-}
-async function openDirectorySet(set, activePanel = activeSide) {
-  if (set.type === "pair")
-    return Promise.all([
-      navigate("left", set.leftPath),
-      navigate("right", set.rightPath),
-    ]);
-  const target =
-    set.openIn === "left" || set.openIn === "right" ? set.openIn : activePanel;
-  return navigate(target, set.path);
-}
-function closeDirectorySetMenu() {
-  directorySetMenu.hidden = true;
-  if (directorySetMenuSide) {
-    getPanelElement(directorySetMenuSide)
-      .querySelector('[data-action="directory-sets"]')
-      ?.setAttribute("aria-expanded", "false");
-  }
-  directorySetMenuSide = null;
-}
-function showDirectorySetMenu(side, button) {
-  if (!directorySetMenu.hidden && directorySetMenuSide === side) {
-    closeDirectorySetMenu();
-    return;
-  }
-  closeDirectorySetMenu();
-  directorySetMenuSide = side;
-  activeSide = side;
-  getPanelElement("left").classList.toggle("is-active", side === "left");
-  getPanelElement("right").classList.toggle("is-active", side === "right");
-  button.setAttribute("aria-expanded", "true");
-  const orderedSets = orderedDirectorySets();
-  directorySetMenu.innerHTML = orderedSets.length
-    ? orderedSets
-        .map(
-          ({ set, index }) =>
-            `<button role="menuitem" data-menu-directory-set="${index}"><strong>${escapeHtml(directorySetLabel(set))}</strong><span class="directory-set-locations">${directorySetDetails(
-              set,
-            )
-              .map(
-                ([label, directory]) =>
-                  `<span class="directory-set-location-label">${escapeHtml(label)}</span><span class="directory-set-location-path">${escapeHtml(directory || "")}</span>`,
-              )
-              .join("")}</span></button>`,
-        )
-        .join("")
-    : '<div class="directory-set-menu-empty">No directory sets saved.</div>';
-  directorySetMenu.hidden = false;
-  const bounds = button.getBoundingClientRect();
-  const menuWidth = directorySetMenu.offsetWidth;
-  const menuHeight = directorySetMenu.offsetHeight;
-  const left = Math.max(
-    8,
-    Math.min(bounds.right - menuWidth, innerWidth - menuWidth - 8),
-  );
-  const below = bounds.bottom + 6;
-  const top =
-    below + menuHeight <= innerHeight - 8
-      ? below
-      : Math.max(8, bounds.top - menuHeight - 6);
-  directorySetMenu.style.left = `${left}px`;
-  directorySetMenu.style.top = `${top}px`;
-}
+
 directorySetMenu.addEventListener("click", async (event) => {
   const item = event.target.closest("[data-menu-directory-set]");
   if (!item) return;
@@ -1188,90 +955,7 @@ directorySetMenu.addEventListener("click", async (event) => {
   closeDirectorySetMenu();
   if (set) await openDirectorySet(set, side);
 });
-function renderDirectorySets() {
-  if (directorySetDraft) {
-    const draft = directorySetDraft;
-    const isPair = draft.type === "pair";
-    settingsContent.innerHTML = `<h2>${draft.index === null ? "New directory set" : "Edit directory set"}</h2><p class="settings-description">Save one location or a left/right directory pair.</p><label class="directory-set-field"><span>Name <small>(optional)</small></span><input data-set-field="name" value="${escapeHtml(draft.name || "")}" placeholder="For example, Project files"></label><label class="directory-set-field"><span>Set type</span><select data-set-field="type"><option value="single" ${!isPair ? "selected" : ""}>Single directory</option><option value="pair" ${isPair ? "selected" : ""}>Directory pair</option></select></label>${isPair ? `<div class="directory-set-field"><span>Left panel directory</span><div class="directory-path-input"><input data-set-field="leftPath" value="${escapeHtml(draft.leftPath || "")}" placeholder="Choose a folder"><button data-browse-field="leftPath">Browse…</button><button data-use-panel="left" title="Use current left panel folder">Use left</button></div></div><div class="directory-set-field"><span>Right panel directory</span><div class="directory-path-input"><input data-set-field="rightPath" value="${escapeHtml(draft.rightPath || "")}" placeholder="Choose a folder"><button data-browse-field="rightPath">Browse…</button><button data-use-panel="right" title="Use current right panel folder">Use right</button></div></div><p class="settings-hint">Opening a pair places its left and right directories in their matching panels.</p>` : `<div class="directory-set-field"><span>Directory</span><div class="directory-path-input"><input data-set-field="path" value="${escapeHtml(draft.path || "")}" placeholder="Choose a folder"><button data-browse-field="path">Browse…</button><button data-use-panel="left" title="Use current left panel folder">Use left</button><button data-use-panel="right" title="Use current right panel folder">Use right</button></div></div><label class="directory-set-field"><span>Open in panel</span><select data-set-field="openIn"><option value="active" ${draft.openIn === "active" ? "selected" : ""}>Active panel</option><option value="left" ${draft.openIn === "left" ? "selected" : ""}>Left panel</option><option value="right" ${draft.openIn === "right" ? "selected" : ""}>Right panel</option></select></label>`}<div class="directory-set-form-actions"><button class="settings-secondary" data-cancel-set>Back</button><button class="settings-primary" data-save-set>Save directory set</button></div>`;
-    return;
-  }
-  const items = orderedDirectorySets()
-    .map(({ set, index }) => {
-      const description =
-        set.type === "pair"
-          ? `Left: ${set.leftPath} · Right: ${set.rightPath}`
-          : `${set.path} · Opens in ${set.openIn === "active" ? "active panel" : `${set.openIn} panel`}`;
-      return `<div class="directory-set-row" draggable="${preferences.directorySetSort === "manual"}" data-sortable-set="${index}"><div class="directory-set-summary"><strong>${escapeHtml(directorySetLabel(set))}</strong><small>${escapeHtml(description)}</small></div><button class="directory-set-open" data-open-set="${index}">Open</button><button class="bookmark-remove" data-edit-set="${index}" aria-label="Edit directory set" title="Edit">✎</button><button class="bookmark-remove" data-remove-set="${index}" aria-label="Remove directory set" title="Remove">×</button></div>`;
-    })
-    .join("");
-  settingsContent.innerHTML = `<h2>Directory Sets</h2><p class="settings-description">Save a single location or a left/right pair, then open it in your preferred panel arrangement.</p><label class="setting-field directory-set-sort-field"><span>Sort directory sets</span><select data-preference="directorySetSort"><option value="manual" ${preferences.directorySetSort === "manual" ? "selected" : ""}>Manual (drag to reorder)</option><option value="alphabetical" ${preferences.directorySetSort === "alphabetical" ? "selected" : ""}>Alphabetically by title</option></select></label><button class="settings-primary" data-new-set>New directory set</button><div class="directory-set-list">${items || '<p class="settings-empty">No directory sets yet.</p>'}</div>`;
-}
-function renderSettingsCategory() {
-  document
-    .querySelectorAll(".settings-category")
-    .forEach((button) =>
-      button.classList.toggle(
-        "active",
-        button.dataset.category === settingsCategory,
-      ),
-    );
-  if (settingsCategory === "files") {
-    settingsContent.innerHTML = `<h2>Files &amp; Folders</h2><p class="settings-description">Choose which items appear and how they are arranged.</p><label class="setting-option"><span><strong>Show hidden files</strong><small>Include dot-prefixed files and folders in the panels.</small></span><input type="checkbox" data-preference="showHidden" ${preferences.showHidden ? "checked" : ""}></label><label class="setting-option"><span><strong>Group folders before files</strong><small>Keep folders at the top of each panel.</small></span><input type="checkbox" data-preference="groupFolders" ${preferences.groupFolders ? "checked" : ""}></label><label class="setting-option"><span><strong>Confirm before deleting</strong><small>When confirmation is disabled, items are moved to the Recycle Bin without a prompt.</small></span><input type="checkbox" data-preference="confirmDelete" ${preferences.confirmDelete ? "checked" : ""}></label>`;
-  } else if (settingsCategory === "date-time") {
-    settingsContent.innerHTML = `<h2>Date &amp; Time</h2><p class="settings-description">Choose how modification dates and times appear in the panels.</p><label class="setting-field"><span>Date format</span><select data-preference="dateFormat"><option value="us" ${preferences.dateFormat === "us" ? "selected" : ""}>MM/DD/YYYY (American)</option><option value="eu" ${preferences.dateFormat === "eu" ? "selected" : ""}>DD/MM/YYYY (European)</option><option value="iso-dash" ${preferences.dateFormat === "iso-dash" ? "selected" : ""}>YYYY-MM-DD</option><option value="iso-slash" ${preferences.dateFormat === "iso-slash" ? "selected" : ""}>YYYY/MM/DD</option></select></label><label class="setting-field date-time-field"><span>Time format</span><select data-preference="timeFormat"><option value="12h" ${preferences.timeFormat === "12h" ? "selected" : ""}>12-hour with AM/PM</option><option value="24h" ${preferences.timeFormat === "24h" ? "selected" : ""}>24-hour, no leading zero</option><option value="24h-padded" ${preferences.timeFormat === "24h-padded" ? "selected" : ""}>24-hour, leading zero</option></select></label>`;
-  } else if (settingsCategory === "theme") {
-    settingsContent.innerHTML = `<h2>Theme</h2><p class="settings-description">Choose the appearance used by the file manager.</p><label class="setting-field"><span>Color theme</span><select data-preference="theme"><option value="system" ${preferences.theme === "system" ? "selected" : ""}>System</option><option value="light" ${preferences.theme === "light" ? "selected" : ""}>Light</option><option value="dark" ${preferences.theme === "dark" ? "selected" : ""}>Dark</option></select></label>`;
-  } else if (settingsCategory === "thumbnails") {
-    settingsContent.innerHTML = `<h2>Thumbnails</h2><p class="settings-description">Choose where generated image previews are stored, or clear the saved previews.</p><div class="thumbnail-cache-field"><label for="thumbnail-cache-path">Cache folder</label><div class="directory-path-input"><input id="thumbnail-cache-path" data-preference="thumbnailCachePath" value="${escapeHtml(preferences.thumbnailCachePath)}" placeholder="Default location"><button data-cache-browse>Browse…</button></div><p class="settings-hint">Leave blank to use the default cache folder: <span id="thumbnail-cache-default-path">Loading…</span></p></div><div class="thumbnail-cache-actions"><button class="settings-secondary" data-cache-default>Use default folder</button><button class="settings-primary" data-clear-thumbnail-cache>Clear thumbnail cache</button></div><p class="settings-hint" id="thumbnail-cache-status" role="status"></p>`;
-    window.fileManager
-      .thumbnailCacheDefaultPath()
-      .then((directory) => {
-        defaultThumbnailCachePath = directory;
-        const label = settingsContent.querySelector(
-          "#thumbnail-cache-default-path",
-        );
-        if (label && settingsCategory === "thumbnails")
-          label.textContent = directory;
-      })
-      .catch(() => {
-        const label = settingsContent.querySelector(
-          "#thumbnail-cache-default-path",
-        );
-        if (label && settingsCategory === "thumbnails")
-          label.textContent = "Unavailable";
-      });
-  } else if (settingsCategory === "directory-sets") renderDirectorySets();
-}
-function openSettings() {
-  settingsCategory = "files";
-  renderSettingsCategory();
-  settingsBackdrop.hidden = false;
-  document.querySelector("#settings-close").focus();
-}
-function closeSettings() {
-  settingsBackdrop.hidden = true;
-  document.querySelector("#settings-button").focus();
-}
-function askForName({ title, label, value = "", confirmLabel }) {
-  nameDialogBackdrop.querySelector("#name-dialog-title").textContent = title;
-  nameDialogBackdrop.querySelector("#name-dialog-label").textContent = label;
-  nameDialogInput.value = value;
-  nameDialogBackdrop.querySelector("#name-dialog-submit").textContent =
-    confirmLabel;
-  nameDialogBackdrop.hidden = false;
-  nameDialogInput.focus();
-  nameDialogInput.select();
-  return new Promise((resolve) => {
-    resolveNameDialog = resolve;
-  });
-}
-function finishNameDialog(value) {
-  if (nameDialogBackdrop.hidden) return;
-  nameDialogBackdrop.hidden = true;
-  const resolve = resolveNameDialog;
-  resolveNameDialog = null;
-  resolve?.(value);
-}
+
 async function openAbout() {
   aboutBackdrop.hidden = false;
   document.querySelector("#about-close").focus();
@@ -1284,6 +968,7 @@ async function openAbout() {
     if (!aboutBackdrop.hidden) version.textContent = "Version unavailable";
   }
 }
+
 function closeAbout() {
   aboutBackdrop.hidden = true;
   document.querySelector("#about-button").focus();
@@ -1920,9 +1605,11 @@ document.addEventListener("mousedown", (event) => {
   closeDirectorySetMenu();
 });
 
+
 // ============================================================================
 // 16. GLOBAL EVENT LISTENERS & KEYBOARD SHORTCUTS
 // ============================================================================
+
 document.addEventListener("click", (event) => {
   const panelElement = event.target.closest(".panel");
   const action = event.target.closest("[data-action]")?.dataset.action;
@@ -1944,6 +1631,7 @@ document.addEventListener("click", (event) => {
   if (action === "forward") moveHistory(activeSide, 1);
   if (action === "about") openAbout();
 });
+
 document.addEventListener("keydown", async (event) => {
   if (!nameDialogBackdrop.hidden) {
     if (event.key === "Escape") finishNameDialog(null);
@@ -1997,32 +1685,41 @@ document.addEventListener("keydown", async (event) => {
   }
 });
 
+
 // ============================================================================
 // 17. SETTINGS & DIALOG BINDINGS
 // ============================================================================
 document
   .querySelector("#settings-button")
-  .addEventListener("click", openSettings);
+  .addEventListener("click", () => openSettings(settingsBackdrop));
+
 document
   .querySelector("#settings-close")
-  .addEventListener("click", closeSettings);
+  .addEventListener("click", () => closeSettings(settingsBackdrop));
+
 nameDialogForm.addEventListener("submit", (event) => {
   event.preventDefault();
   finishNameDialog(nameDialogInput.value);
 });
+
 document
   .querySelector("#name-dialog-cancel")
   .addEventListener("click", () => finishNameDialog(null));
+
 nameDialogBackdrop.addEventListener("click", (event) => {
   if (event.target === nameDialogBackdrop) finishNameDialog(null);
 });
+
 document.querySelector("#about-close").addEventListener("click", closeAbout);
+
 aboutBackdrop.addEventListener("click", (event) => {
   if (event.target === aboutBackdrop) closeAbout();
 });
+
 document
   .querySelector("#properties-close")
   .addEventListener("click", closeProperties);
+
 propertiesBackdrop.addEventListener("click", (event) => {
   if (event.target.closest("#properties-cancel-scan")) {
     if (activeFolderSizeRequest) {
@@ -2035,12 +1732,13 @@ propertiesBackdrop.addEventListener("click", (event) => {
   }
   if (event.target === propertiesBackdrop) closeProperties();
 });
+
 document.querySelectorAll(".settings-category").forEach((button) =>
   button.addEventListener("click", () => {
-    settingsCategory = button.dataset.category;
-    renderSettingsCategory();
+    switchCategory(button.dataset.category);
   }),
 );
+
 settingsContent.addEventListener("change", (event) => {
   const setField = event.target.closest("[data-set-field]");
   if (setField && directorySetDraft) {
@@ -2075,6 +1773,7 @@ settingsContent.addEventListener("change", (event) => {
     renderPanel("right", panels, currentActiveSide, detectedDrives, preferences);
   }
 });
+
 settingsContent.addEventListener("dragstart", (event) => {
   const row = event.target.closest("[data-sortable-set]");
   if (!row || preferences.directorySetSort !== "manual") {
@@ -2085,12 +1784,14 @@ settingsContent.addEventListener("dragstart", (event) => {
   event.dataTransfer.effectAllowed = "move";
   row.classList.add("is-dragging");
 });
+
 settingsContent.addEventListener("dragend", (event) => {
   event.target.closest("[data-sortable-set]")?.classList.remove("is-dragging");
   settingsContent
     .querySelectorAll(".drop-before,.drop-after")
     .forEach((row) => row.classList.remove("drop-before", "drop-after"));
 });
+
 settingsContent.addEventListener("dragover", (event) => {
   const row = event.target.closest("[data-sortable-set]");
   if (preferences.directorySetSort !== "manual" || !row) return;
@@ -2104,6 +1805,7 @@ settingsContent.addEventListener("dragover", (event) => {
       : "drop-after";
   row.classList.add(position);
 });
+
 settingsContent.addEventListener("drop", (event) => {
   const target = event.target.closest("[data-sortable-set]");
   const draggedIndex = event.dataTransfer.getData("text/plain");
@@ -2126,12 +1828,14 @@ settingsContent.addEventListener("drop", (event) => {
   savePreferences();
   renderDirectorySets();
 });
+
 settingsContent.addEventListener("input", (event) => {
   const field = event.target.closest("[data-set-field]");
   if (field && directorySetDraft && field.dataset.setField !== "type") {
     directorySetDraft[field.dataset.setField] = field.value;
   }
 });
+
 settingsContent.addEventListener("click", async (event) => {
   if (event.target.closest("[data-cache-browse]")) {
     const input = settingsContent.querySelector("#thumbnail-cache-path");
@@ -2265,6 +1969,7 @@ settingsContent.addEventListener("click", async (event) => {
     openDirectorySet(set, activeSide);
   }
 });
+
 
 // ============================================================================
 // 18. APP INITIALIZATION & SPLITTER RESIZING
