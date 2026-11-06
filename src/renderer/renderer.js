@@ -1,5 +1,9 @@
 import { PanelModel } from "../models/PanelModel.js";
-import { renderDriveButtons, panelStatus, renderPanel } from "../ui/panel-renderer.js";
+import {
+  renderDriveButtons,
+  panelStatus,
+  renderPanel,
+} from "../ui/panel-renderer.js";
 import {
   escapeHtml,
   getPanelElement,
@@ -68,7 +72,6 @@ import {
   bindHistoryLongPress,
 } from "../ui/thumbnail-history-service.js";
 
-
 // ============================================================================
 // 1. STATE INITIALIZATION & LAYOUT RESTORATION
 // ============================================================================
@@ -86,7 +89,6 @@ const panels = {
 let layoutInitialized = false;
 let activeSide = "left";
 let clipboard = null;
-
 
 // ============================================================================
 // 2. PREFERENCES & CONFIGURATION STATE
@@ -124,7 +126,6 @@ if (!Array.isArray(savedPreferences.directorySets))
     }),
   );
 delete preferences.bookmarks;
-
 
 // ============================================================================
 // 3. UI ELEMENT REFERENCES & GLOBAL MODAL STATE
@@ -231,7 +232,6 @@ initThumbnailHistoryService({
   historyMenu,
 });
 
-
 // ============================================================================
 // 4. STORAGE PERSISTENCE & THEME SYNC
 // ============================================================================
@@ -305,9 +305,21 @@ window.addEventListener("storage", (event) => {
     delete preferences.bookmarks;
     document.documentElement.dataset.theme = preferences.theme;
     if (layoutInitialized) {
-      renderPanel("left", panels, currentActiveSide, detectedDrives, preferences);
+      renderPanel(
+        "left",
+        panels,
+        currentActiveSide,
+        detectedDrives,
+        preferences,
+      );
       bindPanel("left");
-      renderPanel("right", panels, currentActiveSide, detectedDrives, preferences);
+      renderPanel(
+        "right",
+        panels,
+        currentActiveSide,
+        detectedDrives,
+        preferences,
+      );
       bindPanel("right");
     }
     if (!settingsBackdrop.hidden && !directorySetDraft)
@@ -317,7 +329,6 @@ window.addEventListener("storage", (event) => {
   }
 });
 savePreferences();
-
 
 // ============================================================================
 // 6, 7, 8. DIALOGS, PROPERTIES & CONFLICT RESOLUTION
@@ -333,7 +344,7 @@ initDialogsService({
   conflictRename,
   conflictRenameInput,
   nameDialogBackdrop,
-  nameDialogInput
+  nameDialogInput,
 });
 
 // Folder size progress listener (relies on activeFolderSizeRequest from service)
@@ -344,10 +355,12 @@ window.fileManager.onFolderSizeProgress((progress) => {
   const folderCountEl = document.querySelector("#properties-folder-count");
   const scanStatusEl = document.querySelector("#properties-scan-status");
 
-  if (sizeEl) sizeEl.textContent = `${formatSize(progress.totalBytes, false)} so far`;
+  if (sizeEl)
+    sizeEl.textContent = `${formatSize(progress.totalBytes, false)} so far`;
   if (fileCountEl) fileCountEl.textContent = String(progress.fileCount);
   if (folderCountEl) folderCountEl.textContent = String(progress.folderCount);
-  if (scanStatusEl) scanStatusEl.textContent = "Calculating folder size and contents…";
+  if (scanStatusEl)
+    scanStatusEl.textContent = "Calculating folder size and contents…";
 });
 
 // Make dialogs draggable
@@ -363,12 +376,14 @@ window.fileManager.onFolderSizeProgress((progress) => {
 
 // Conflict resolution DOM event bindings
 conflictItems.addEventListener("click", (event) => {
-  const choice = event.target.closest("[data-conflict-choice]")?.dataset.conflictChoice;
+  const choice = event.target.closest("[data-conflict-choice]")?.dataset
+    .conflictChoice;
   if (choice) finishConflictDecision({ choice });
 });
 
 conflictActions.addEventListener("click", (event) => {
-  const choice = event.target.closest("[data-conflict-choice]")?.dataset.conflictChoice;
+  const choice = event.target.closest("[data-conflict-choice]")?.dataset
+    .conflictChoice;
   if (!choice) return;
   if (choice === "rename") {
     conflictRename.hidden = false;
@@ -379,14 +394,16 @@ conflictActions.addEventListener("click", (event) => {
   finishConflictDecision({ choice });
 });
 
-document.querySelector("[data-conflict-confirm-rename]").addEventListener("click", () => {
-  const name = conflictRenameInput.value.trim();
-  if (!name || name === "." || name === ".." || /[\\/]/.test(name)) {
-    toast("Enter a valid file name");
-    return;
-  }
-  finishConflictDecision({ choice: "rename", name });
-});
+document
+  .querySelector("[data-conflict-confirm-rename]")
+  .addEventListener("click", () => {
+    const name = conflictRenameInput.value.trim();
+    if (!name || name === "." || name === ".." || /[\\/]/.test(name)) {
+      toast("Enter a valid file name");
+      return;
+    }
+    finishConflictDecision({ choice: "rename", name });
+  });
 
 conflictRenameInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
@@ -570,7 +587,6 @@ function editPanelPath(side) {
   });
 }
 
-
 // ============================================================================
 // 10. ENTRIES RENDERING & SEARCH ENGINE
 // ============================================================================
@@ -660,7 +676,14 @@ window.fileManager.onSearchProgress(
           sensitivity: "base",
         }),
       );
-      renderPanel(side, panels, currentActiveSide, detectedDrives, preferences, { loadThumbnails: false });
+      renderPanel(
+        side,
+        panels,
+        currentActiveSide,
+        detectedDrives,
+        preferences,
+        { loadThumbnails: false },
+      );
       bindPanel(side);
     }, 120);
   },
@@ -733,7 +756,6 @@ document.addEventListener("auxclick", (event) => {
   event.stopPropagation();
   moveHistory(activeSide, event.button === 3 ? -1 : 1);
 });
-
 
 // ============================================================================
 // 12. DIRECTORY SETS, BOOKMARKS & SETTINGS MODAL
@@ -834,6 +856,22 @@ function bindPanel(side) {
       panel.iconSize,
     );
     applyThumbnailSize(panel);
+
+    // Dynamically update live tile and grid sizes
+    const tileSize = panel.iconSize + 48;
+    const iconGrid = panelEl.querySelector(".icon-grid");
+    if (iconGrid) {
+      iconGrid.style.setProperty("--tile-width", `${tileSize}px`);
+    }
+    panelEl.querySelectorAll(".icon-tile").forEach((tile) => {
+      tile.style.width = `${tileSize}px`;
+      tile.style.height = `${tileSize}px`;
+    });
+    panelEl.querySelectorAll(".tile-visual").forEach((visual) => {
+      visual.style.width = `${panel.iconSize}px`;
+      visual.style.height = `${panel.iconSize}px`;
+    });
+
     persistPanelViews();
     persistLayout();
   });
@@ -1218,32 +1256,6 @@ function clearRightDropTargets() {
     .forEach((element) => element.classList.remove("right-drop-target"));
 }
 
-function updateRightDropTarget(x, y) {
-  clearRightDropTargets();
-  const underPointer = document.elementFromPoint(x, y);
-  const targetPanel = underPointer?.closest(".panel");
-  if (!targetPanel || targetPanel.dataset.panel === rightDragCandidate.side) {
-    rightDragCandidate.destination = null;
-    return;
-  }
-  const side = targetPanel.dataset.panel;
-  const row = underPointer.closest("[data-entry]");
-  const targetEntry = row
-    ? panels[side].entries[Number(row.dataset.entry)]
-    : null;
-  const destination = targetEntry?.isDirectory
-    ? targetEntry.path
-    : panels[side].path;
-  rightDragCandidate.destination = destination
-    ? { side, path: destination }
-    : null;
-  if (rightDragCandidate.destination) {
-    (targetEntry?.isDirectory ? row : targetPanel).classList.add(
-      "right-drop-target",
-    );
-  }
-}
-
 document.addEventListener("pointerdown", (event) => {
   handlePointerDown(event, panels, getSelected);
 });
@@ -1288,7 +1300,6 @@ document.addEventListener("mousedown", (event) => {
     return;
   closeDirectorySetMenu();
 });
-
 
 // ============================================================================
 // 16. GLOBAL EVENT LISTENERS & KEYBOARD SHORTCUTS
@@ -1369,7 +1380,6 @@ document.addEventListener("keydown", async (event) => {
   }
 });
 
-
 // ============================================================================
 // 17. SETTINGS & DIALOG BINDINGS
 // ============================================================================
@@ -1447,14 +1457,26 @@ settingsContent.addEventListener("change", (event) => {
     control.dataset.preference === "groupFolders"
   ) {
     renderPanel("left", panels, currentActiveSide, detectedDrives, preferences);
-    renderPanel("right", panels, currentActiveSide, detectedDrives, preferences);
+    renderPanel(
+      "right",
+      panels,
+      currentActiveSide,
+      detectedDrives,
+      preferences,
+    );
   }
   if (
     control.dataset.preference === "dateFormat" ||
     control.dataset.preference === "timeFormat"
   ) {
     renderPanel("left", panels, currentActiveSide, detectedDrives, preferences);
-    renderPanel("right", panels, currentActiveSide, detectedDrives, preferences);
+    renderPanel(
+      "right",
+      panels,
+      currentActiveSide,
+      detectedDrives,
+      preferences,
+    );
   }
 });
 
@@ -1653,7 +1675,6 @@ settingsContent.addEventListener("click", async (event) => {
     openDirectorySet(set, activeSide);
   }
 });
-
 
 // ============================================================================
 // 18. APP INITIALIZATION & SPLITTER RESIZING
