@@ -17,6 +17,14 @@ export function initDragDropService(config) {
   transferWithConflicts = config.transferWithConflicts;
   navigate = config.navigate;
   dropActionMenu = config.dropActionMenu;
+
+  // Handle clicking outside the drop action menu to dismiss it
+  document.addEventListener("mousedown", (event) => {
+    if (!dropActionMenu.contains(event.target)) {
+      dropActionMenu.hidden = true;
+      pendingRightDrop = null;
+    }
+  });
 }
 
 /**

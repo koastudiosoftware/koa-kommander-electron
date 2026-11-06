@@ -1,6 +1,6 @@
 import { PanelModel } from "../models/PanelModel.js";
+import { initSearchService } from "../ui/search-service.js";
 import {
-  renderDriveButtons,
   panelStatus,
   renderPanel,
 } from "../ui/panel-renderer.js";
@@ -90,9 +90,11 @@ let layoutInitialized = false;
 let activeSide = "left";
 let clipboard = null;
 
+
 // ============================================================================
 // 2. PREFERENCES & CONFIGURATION STATE
 // ============================================================================
+
 const defaultPreferences = {
   showHidden: false,
   groupFolders: true,
@@ -104,18 +106,24 @@ const defaultPreferences = {
   directorySetSort: "manual",
   thumbnailCachePath: "",
 };
+
 let preferences;
 let savedPreferences = {};
+
 try {
   savedPreferences = JSON.parse(localStorage.getItem("koa-settings") || "{}");
 } catch {
   savedPreferences = {};
 }
+
 preferences = { ...defaultPreferences, ...savedPreferences };
+
 if (typeof preferences.thumbnailCachePath !== "string")
   preferences.thumbnailCachePath = "";
+
 if (!["manual", "alphabetical"].includes(preferences.directorySetSort))
   preferences.directorySetSort = "manual";
+
 if (!Array.isArray(savedPreferences.directorySets))
   preferences.directorySets = (savedPreferences.bookmarks || []).map(
     (directory) => ({
@@ -125,11 +133,14 @@ if (!Array.isArray(savedPreferences.directorySets))
       name: "",
     }),
   );
+
 delete preferences.bookmarks;
+
 
 // ============================================================================
 // 3. UI ELEMENT REFERENCES & GLOBAL MODAL STATE
 // ============================================================================
+
 const summary = document.querySelector("#drive-space-summary");
 const menu = document.querySelector("#context-menu");
 const historyMenu = document.querySelector("#history-menu");
@@ -158,9 +169,6 @@ let directorySetDraft = null;
 let activeFolderSizeRequest = null;
 let rightDragCandidate = null;
 let suppressRightContextUntil = 0;
-let diskSpaceTimer = null;
-let diskSpaceRequestId = 0;
-let displayedSpacePath = null;
 
 initDrivesService({
   panels,
@@ -231,6 +239,20 @@ initThumbnailHistoryService({
   summary,
   historyMenu,
 });
+
+initSearchService({
+  panels,
+  preferences: () => preferences,
+  getActiveSide: () => activeSide,
+  navigate,
+  renderPanel: (side, opts) => renderPanel(side, panels, currentActiveSide, detectedDrives, preferences, opts),
+  bindPanel, // 👈 Added this
+  searchForm: document.querySelector("#global-search"),
+  searchQuery: document.querySelector("#search-query"),
+  searchMode: document.querySelector("#search-mode"),
+  searchCancel: document.querySelector("#search-cancel"),
+});
+
 
 // ============================================================================
 // 4. STORAGE PERSISTENCE & THEME SYNC
@@ -328,7 +350,9 @@ window.addEventListener("storage", (event) => {
     /* Keep the current window usable if another instance writes malformed settings. */
   }
 });
+
 savePreferences();
+
 
 // ============================================================================
 // 6, 7, 8. DIALOGS, PROPERTIES & CONFLICT RESOLUTION
@@ -413,9 +437,11 @@ conflictRenameInput.addEventListener("keydown", (event) => {
   }
 });
 
+
 // ============================================================================
 // 9. NAVIGATION & PANEL CORE LOGIC
 // ============================================================================
+
 async function navigate(
   side,
   directory,
@@ -587,143 +613,6 @@ function editPanelPath(side) {
   });
 }
 
-// ============================================================================
-// 10. ENTRIES RENDERING & SEARCH ENGINE
-// ============================================================================
-
-const searchForm = document.querySelector("#global-search");
-const searchQuery = document.querySelector("#search-query");
-const searchMode = document.querySelector("#search-mode");
-const searchCancel = document.querySelector("#search-cancel");
-let searchDebounceTimer = null;
-let searchRenderTimer = null;
-function updateSearchControl() {
-  searchCancel.hidden = !searchQuery.value;
-  searchCancel.title = panels[activeSide].searchId
-    ? "Cancel search"
-    : "Clear search results";
-  searchCancel.setAttribute("aria-label", searchCancel.title);
-}
-async function runPanelSearch() {
-  const side = activeSide;
-  const panel = panels[side];
-  const query = searchQuery.value.trim();
-  if (!query || !panel.path) return;
-  if (panel.searchId) window.fileManager.cancelSearch(panel.searchId);
-  const searchId = crypto.randomUUID();
-  const root = panel.path;
-  panel.searchId = searchId;
-  panel.searchRoot = root;
-  panel.searchMatches = [];
-  panel.selected.clear();
-  updateSearchControl();
-  setStatus("Searching file names…");
-  renderPanel(side, panels, currentActiveSide, detectedDrives, preferences);
-  try {
-    const result = await window.fileManager.search({
-      searchId,
-      root,
-      query,
-      mode: searchMode.value,
-    });
-    if (panel.searchId !== searchId) return;
-    panel.searchId = null;
-    panel.searchRoot = root;
-    clearTimeout(searchRenderTimer);
-    panel.entries = result.results.sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, {
-        numeric: true,
-        sensitivity: "base",
-      }),
-    );
-    panel.selected.clear();
-    updateSearchControl();
-    renderPanel(side, panels, currentActiveSide, detectedDrives, preferences);
-    bindPanel(side);
-    setStatus(
-      result.cancelled
-        ? `Search cancelled · ${result.results.length} matches`
-        : `Search complete · ${result.results.length} matches`,
-    );
-  } catch (error) {
-    if (panel.searchId !== searchId) return;
-    panel.searchId = null;
-    panel.searchRoot = null;
-    updateSearchControl();
-    await navigate(side, root);
-    toast(error.message);
-  }
-}
-
-window.fileManager.onSearchProgress(
-  ({ searchId, scanned, matches, results = [] }) => {
-    const side = ["left", "right"].find(
-      (candidate) => panels[candidate].searchId === searchId,
-    );
-    if (!side) return;
-    const panel = panels[side];
-    panel.searchMatches.push(...results);
-    if (side === activeSide)
-      setStatus(
-        `Searching… ${scanned.toLocaleString()} checked · ${matches} matches`,
-      );
-    clearTimeout(searchRenderTimer);
-    searchRenderTimer = setTimeout(() => {
-      if (panel.searchId !== searchId) return;
-      panel.entries = [...panel.searchMatches].sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, {
-          numeric: true,
-          sensitivity: "base",
-        }),
-      );
-      renderPanel(
-        side,
-        panels,
-        currentActiveSide,
-        detectedDrives,
-        preferences,
-        { loadThumbnails: false },
-      );
-      bindPanel(side);
-    }, 120);
-  },
-);
-
-searchForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  clearTimeout(searchDebounceTimer);
-  runPanelSearch();
-});
-
-searchQuery.addEventListener("input", () => {
-  updateSearchControl();
-  clearTimeout(searchDebounceTimer);
-  if (searchQuery.value.trim()) {
-    searchDebounceTimer = setTimeout(runPanelSearch, 250);
-    return;
-  }
-  const panel = panels[activeSide];
-  if (panel.searchRoot) navigate(activeSide, panel.searchRoot);
-});
-
-searchQuery.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    event.preventDefault();
-    const panel = panels[activeSide];
-    if (panel.searchId) window.fileManager.cancelSearch(panel.searchId);
-    if (panel.searchRoot) navigate(activeSide, panel.searchRoot);
-    searchQuery.value = "";
-    updateSearchControl();
-  }
-});
-
-searchCancel.addEventListener("click", () => {
-  const panel = panels[activeSide];
-  if (panel.searchId) window.fileManager.cancelSearch(panel.searchId);
-  if (panel.searchRoot) navigate(activeSide, panel.searchRoot);
-  searchQuery.value = "";
-  updateSearchControl();
-});
 
 // ============================================================================
 // 11. THUMBNAILS, STATUS & HISTORY
@@ -1283,13 +1172,6 @@ document.addEventListener("contextmenu", (event) => {
 dropActionMenu.addEventListener("click", async (event) => {
   const choice = event.target.closest("[data-drop-choice]")?.dataset.dropChoice;
   if (choice) await executeDropAction(choice);
-});
-
-document.addEventListener("mousedown", (event) => {
-  if (!dropActionMenu.contains(event.target)) {
-    dropActionMenu.hidden = true;
-    pendingRightDrop = null;
-  }
 });
 
 document.addEventListener("mousedown", (event) => {

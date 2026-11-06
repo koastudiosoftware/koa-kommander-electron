@@ -11,6 +11,8 @@ import {
   pathParts,
 } from "../utils/panel-utils.js";
 
+import { searchLocation } from "../ui/search-service.js";
+
 import { applyThumbnailSize, loadThumbnailImages } from "../ui/thumbnail-history-service.js";
 
 /**
