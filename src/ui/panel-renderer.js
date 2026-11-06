@@ -12,10 +12,11 @@ import {
 } from "../utils/panel-utils.js";
 
 /**
- *
- * @param {string} side
- * @param {Object} panels
- * @returns
+ * Renders the drive buttons for the specified side.
+ * @param {Array} detectedDrives - The list of detected drives.
+ * @param {string} side - The side of the panel to render drive buttons for.
+ * @param {Object} panels - The panels object containing panel data.
+ * @returns {string} - The HTML string for the rendered drive buttons.
  */
 export function renderDriveButtons(detectedDrives, side, panels) {
   console.log(`Rendering drive buttons for side: ${side}, path: ${panels[side].path}`);
@@ -31,10 +32,17 @@ export function renderDriveButtons(detectedDrives, side, panels) {
     .join("");
 }
 
-//
-// renderPanel
-//
-//
+/**
+ * Renders the panel for the specified side.
+ * @param {string} side - The side of the panel to render.
+ * @param {Object} panels - The panels object containing panel data.
+ * @param {string} currentActiveSide - The currently active side.
+ * @param {Array} detectedDrives - The list of detected drives.
+ * @param {Object} preferences - The user preferences.
+ * @param {Object} param5 - Additional parameters.
+ * @returns {number} - The thumbnail generation counter.
+ * @returns
+ */
 export function renderPanel(
   side,
   panels,
@@ -62,13 +70,13 @@ export function renderPanel(
   return thumbnailGeneration;
 }
 
-//
-// renderEntries
-//
-// Generate the HTML for the file entries in the panel, based on the current view
-// (details or icons) and the sorting/filtering preferences. It returns a string
-// of HTML that can be inserted into the panel's DOM.
-//
+/**
+ * Renders the entries for the specified side.
+ * @param {string} side - The side of the panel to render entries for.
+ * @param {Object} panels - The panels object containing panel data.
+ * @param {Object} preferences - The user preferences.
+ * @returns {string} - The HTML string for the rendered entries.
+ */
 function renderEntries(side, panels, preferences) {
   const panel = panels[side];
   console.log(`Rendering entries for side: ${side}, path: ${panel.path}, view: ${panel.view}`);
@@ -130,13 +138,13 @@ function renderEntries(side, panels, preferences) {
   return `<div class="file-area"><div class="icon-grid" style="--tile-width:${tileSize}px">${tiles}</div>${visibleEntries.length ? "" : '<div class="empty-state">' + icon("folder") + `<strong>${panel.searchRoot ? "No matches found" : "This folder is empty"}</strong><span>${panel.searchRoot ? "Try another name or pattern" : "Drop files here to add them"}</span>` + "</div>"}</div>`;
 }
 
-//
-// panelChrome
-//
-// Generate the HTML for the panel's top chrome, including the path bar, toolbar buttons,
-// and view controls. It returns a string of HTML that can be inserted into the panel's
-// DOM.
-//
+/**
+ * Renders the chrome for the specified panel side.
+ * @param {string} side - The side of the panel to render chrome for.
+ * @param {Object} panels - The panels object containing panel data.
+ * @param {Array} detectedDrives - The list of detected drives.
+ * @returns {string} - The HTML string for the rendered panel chrome.
+ */
 function panelChrome(side, panels, detectedDrives) {
   const panel = panels[side];
   console.log(`Rendering panel chrome for side: ${side}, path: ${panel.path}, view: ${panel.view}`);
@@ -169,12 +177,11 @@ function panelChrome(side, panels, detectedDrives) {
     </div>`;
 }
 
-//
-// panelStatus
-//
-// Generates the status HTML for the panel, showing the number of selected items and
-// their total size.
-//
+/**
+ * Renders the status bar for the specified panel.
+ * @param {Object} panel
+ * @returns {string} HTML string representing the panel status, including selected count and total size of selected files.
+ */
 function panelStatus(panel) {
   console.log(`Rendering panel status for path: ${panel.path}, selected count: ${panel.selected.size}`);
   const selectedCount = panel.selected.size;

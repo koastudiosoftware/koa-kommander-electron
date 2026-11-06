@@ -12,7 +12,15 @@ import {
   setStatus,
   toast,
 } from "../utils/panel-utils.js";
-
+import {
+  copySelection,
+  deleteSelection,
+  getSelected,
+  initClipboardService,
+  pasteSelection,
+  renameSelection,
+  transferWithConflicts,
+} from "../ui/context-menu-service.js";
 
 // ============================================================================
 // 1. STATE INITIALIZATION & LAYOUT RESTORATION
@@ -70,6 +78,21 @@ if (!Array.isArray(savedPreferences.directorySets))
   );
 delete preferences.bookmarks;
 
+initClipboardService({
+  panels,
+  preferences: () => preferences, // or direct reference if preferences is mutated in place
+  getActiveSide: () => activeSide,
+  setActiveSide: (side) => {
+    activeSide = side;
+  },
+  getClipboard: () => clipboard,
+  setClipboard: (val) => {
+    clipboard = val;
+  },
+  navigate,
+  askTransferConflict,
+  askForName,
+});
 
 // ============================================================================
 // 3. UI ELEMENT REFERENCES & GLOBAL MODAL STATE
@@ -211,6 +234,7 @@ function isImageEntry(entry) {
 // ============================================================================
 // 6. PROPERTIES & FOLDER SIZE SCANNING
 // ============================================================================
+
 function showProperties(properties) {
   cancelFolderSizeScan();
   const rows = [
@@ -245,15 +269,18 @@ function showProperties(properties) {
   document.querySelector("#properties-close").focus();
   if (properties.isDirectory) startFolderSizeScan(properties.path);
 }
+
 function cancelFolderSizeScan() {
   if (!activeFolderSizeRequest) return;
   window.fileManager.cancelFolderSize(activeFolderSizeRequest);
   activeFolderSizeRequest = null;
 }
+
 function closeProperties() {
   cancelFolderSizeScan();
   propertiesBackdrop.hidden = true;
 }
+
 async function startFolderSizeScan(itemPath) {
   const requestId =
     globalThis.crypto?.randomUUID?.() ||
@@ -301,6 +328,7 @@ async function startFolderSizeScan(itemPath) {
     if (activeFolderSizeRequest === requestId) activeFolderSizeRequest = null;
   }
 }
+
 window.fileManager.onFolderSizeProgress((progress) => {
   if (
     progress.requestId !== activeFolderSizeRequest ||
@@ -319,9 +347,11 @@ window.fileManager.onFolderSizeProgress((progress) => {
     "Calculating folder size and contents…";
 });
 
+
 // ============================================================================
 // 7. DIALOG DRAG & DROP UTILITIES
 // ============================================================================
+
 function makeDialogDraggable(dialogSelector, handleSelector) {
   const dialog = document.querySelector(dialogSelector);
   const handle = dialog?.querySelector(handleSelector);
@@ -1262,10 +1292,7 @@ function closeAbout() {
 // ============================================================================
 // 13. PANEL ACTIONS, SELECTION & FILE OPERATIONS
 // ============================================================================
-function getSelected(side) {
-  const panel = panels[side];
-  return panel.entries.filter((entry) => panel.selected.has(entry.path));
-}
+
 function refreshSelection() {
   document.querySelectorAll(".panel").forEach((panelElement) => {
     const side = panelElement.dataset.panel;
@@ -1651,143 +1678,11 @@ function showBackgroundContextMenu(x, y, side) {
     }),
   );
 }
+
 function hideMenu(event) {
   if (!menu.contains(event.target)) menu.hidden = true;
 }
 
-function copySelection(side, cut) {
-  const items = getSelected(side);
-  if (!items.length) return;
-  clipboard = {
-    paths: items.map((item) => item.path),
-    operation: cut ? "move" : "copy",
-  };
-  setStatus(
-    `${cut ? "Cut" : "Copied"} ${items.length} item${items.length === 1 ? "" : "s"}`,
-  );
-  toast(
-    `${cut ? "Cut" : "Copied"} ${items.length} item${items.length === 1 ? "" : "s"}`,
-  );
-}
-async function transferWithConflicts({ sources, destination, operation }) {
-  const results = [];
-  for (const source of sources) {
-    let [result] = await window.fileManager.transfer({
-      sources: [source],
-      destination,
-      operation,
-    });
-    while (result?.conflict) {
-      const decision = await askTransferConflict(result);
-      if (decision.choice === "cancel") {
-        results.push({ source, ok: false, cancelled: true });
-        return results;
-      }
-      if (decision.choice === "skip") {
-        results.push({ source, ok: false, skipped: true });
-        result = null;
-        break;
-      }
-      [result] = await window.fileManager.transfer({
-        sources: [source],
-        destination,
-        operation,
-        conflictAction: decision.choice,
-        renameTo: decision.name,
-      });
-    }
-    if (result) results.push(result);
-  }
-  return results;
-}
-async function pasteSelection() {
-  if (!clipboard?.paths.length) return;
-  const operation = clipboard.operation;
-  const result = await transferWithConflicts({
-    sources: clipboard.paths,
-    destination: panels[activeSide].path,
-    operation,
-  });
-  const succeeded = result.filter((item) => item.ok).length;
-  const failed = result.find(
-    (item) => !item.ok && !item.cancelled && !item.skipped,
-  );
-  const cancelled = result.some((item) => item.cancelled);
-  const skipped = result.filter((item) => item.skipped).length;
-  if (
-    operation === "move" &&
-    !failed &&
-    !cancelled &&
-    succeeded === clipboard.paths.length
-  )
-    clipboard = null;
-  await Promise.all([
-    navigate("left", panels.left.path),
-    navigate("right", panels.right.path),
-  ]);
-  if (failed) toast(failed.error);
-  else if (cancelled)
-    toast(
-      succeeded
-        ? `${operation === "move" ? "Moved" : "Copied"} ${succeeded} item${succeeded === 1 ? "" : "s"}; remaining items skipped`
-        : "Transfer cancelled",
-    );
-  else if (skipped && succeeded)
-    toast(
-      `${operation === "move" ? "Moved" : "Copied"} ${succeeded} item${succeeded === 1 ? "" : "s"}; skipped ${skipped} existing item${skipped === 1 ? "" : "s"}`,
-    );
-  else if (skipped)
-    toast(`Skipped ${skipped} existing item${skipped === 1 ? "" : "s"}`);
-  else
-    toast(
-      `${operation === "move" ? "Moved" : "Copied"} ${succeeded} item${succeeded === 1 ? "" : "s"}`,
-    );
-}
-async function deleteSelection(side) {
-  const items = getSelected(side);
-  if (!items.length) return;
-  const outcome = await window.fileManager.delete({
-    entries: items.map((item) => item.path),
-    confirm: preferences.confirmDelete,
-  });
-  if (outcome.cancelled) return;
-  const failed = outcome.results.find((item) => !item.ok);
-  const succeeded = outcome.results.filter((item) => item.ok).length;
-  await navigate(side, panels[side].path);
-  if (failed) toast(failed.error);
-  else if (outcome.permanent)
-    toast(`Permanently deleted ${succeeded} item${succeeded === 1 ? "" : "s"}`);
-  else
-    toast(
-      `Moved ${succeeded} item${succeeded === 1 ? "" : "s"} to the Recycle Bin`,
-    );
-}
-async function renameSelection(side) {
-  const selected = getSelected(side);
-  if (!selected.length) {
-    toast("Select one item to rename");
-    return;
-  }
-  if (selected.length > 1) {
-    toast("Rename one item at a time");
-    return;
-  }
-  const item = selected[0];
-  const name = await askForName({
-    title: "Rename item",
-    label: "New name",
-    value: item.name,
-    confirmLabel: "Rename",
-  });
-  if (name === null || !name.trim() || name.trim() === item.name) return;
-  try {
-    await window.fileManager.rename({ source: item.path, name: name.trim() });
-    await navigate(side, panels[side].path);
-    toast("Item renamed");
-  } catch (error) {
-    toast(error.message);
-  }
-}
 async function handleDrop(event, destinationSide, destination) {
   let payload;
   try {
@@ -1840,6 +1735,7 @@ function clearRightDropTargets() {
     )
     .forEach((element) => element.classList.remove("right-drop-target"));
 }
+
 function updateRightDropTarget(x, y) {
   clearRightDropTargets();
   const underPointer = document.elementFromPoint(x, y);
@@ -1865,6 +1761,7 @@ function updateRightDropTarget(x, y) {
     );
   }
 }
+
 function openDropActionMenu(paths, destination, x, y) {
   pendingRightDrop = { paths, destination };
   dropActionMenu.hidden = false;
@@ -1873,6 +1770,7 @@ function openDropActionMenu(paths, destination, x, y) {
   dropActionMenu.style.left = `${Math.max(6, Math.min(x, innerWidth - width - 6))}px`;
   dropActionMenu.style.top = `${Math.max(6, Math.min(y, innerHeight - height - 6))}px`;
 }
+
 document.addEventListener("pointerdown", (event) => {
   if (event.button !== 2) return;
   const row = event.target.closest("[data-entry]");
@@ -1895,6 +1793,7 @@ document.addEventListener("pointerdown", (event) => {
     destination: null,
   };
 });
+
 document.addEventListener("pointermove", (event) => {
   const drag = rightDragCandidate;
   if (!drag || drag.pointerId !== event.pointerId) return;
@@ -1916,6 +1815,7 @@ document.addEventListener("pointermove", (event) => {
   event.preventDefault();
   updateRightDropTarget(event.clientX, event.clientY);
 });
+
 window.addEventListener("pointerup", (event) => {
   const drag = rightDragCandidate;
   if (!drag || drag.pointerId !== event.pointerId) return;
@@ -1934,18 +1834,21 @@ window.addEventListener("pointerup", (event) => {
     );
   else toast("Drop on the other panel to choose an action");
 });
+
 window.addEventListener("pointercancel", (event) => {
   if (rightDragCandidate?.pointerId !== event.pointerId) return;
   rightDragCandidate = null;
   document.body.classList.remove("right-dragging");
   clearRightDropTargets();
 });
+
 document.addEventListener("contextmenu", (event) => {
   if (rightDragCandidate?.dragging || Date.now() < suppressRightContextUntil) {
     event.preventDefault();
     event.stopPropagation();
   }
 });
+
 dropActionMenu.addEventListener("click", async (event) => {
   const choice = event.target.closest("[data-drop-choice]")?.dataset.dropChoice;
   const drop = pendingRightDrop;
@@ -2000,12 +1903,14 @@ dropActionMenu.addEventListener("click", async (event) => {
       `${choice === "copy" ? "Copied" : "Moved"} ${succeeded} item${succeeded === 1 ? "" : "s"}`,
     );
 });
+
 document.addEventListener("mousedown", (event) => {
   if (!dropActionMenu.contains(event.target)) {
     dropActionMenu.hidden = true;
     pendingRightDrop = null;
   }
 });
+
 document.addEventListener("mousedown", (event) => {
   if (
     directorySetMenu.contains(event.target) ||
