@@ -102,21 +102,6 @@ if (!Array.isArray(savedPreferences.directorySets))
   );
 delete preferences.bookmarks;
 
-initClipboardService({
-  panels,
-  preferences: () => preferences, // or direct reference if preferences is mutated in place
-  getActiveSide: () => activeSide,
-  setActiveSide: (side) => {
-    activeSide = side;
-  },
-  getClipboard: () => clipboard,
-  setClipboard: (val) => {
-    clipboard = val;
-  },
-  navigate,
-  askTransferConflict,
-  askForName,
-});
 
 // ============================================================================
 // 3. UI ELEMENT REFERENCES & GLOBAL MODAL STATE
@@ -156,6 +141,23 @@ let suppressRightContextUntil = 0;
 let diskSpaceTimer = null;
 let diskSpaceRequestId = 0;
 let displayedSpacePath = null;
+
+
+initClipboardService({
+  panels,
+  preferences: () => preferences, // or direct reference if preferences is mutated in place
+  getActiveSide: () => activeSide,
+  setActiveSide: (side) => {
+    activeSide = side;
+  },
+  getClipboard: () => clipboard,
+  setClipboard: (val) => {
+    clipboard = val;
+  },
+  navigate,
+  askTransferConflict,
+  askForName,
+});
 
 // must come after settingsBackdrop is defined
 initSettingsService({
@@ -250,7 +252,9 @@ window.addEventListener("storage", (event) => {
     document.documentElement.dataset.theme = preferences.theme;
     if (layoutInitialized) {
       renderPanel("left", panels, currentActiveSide, detectedDrives, preferences);
+      bindPanel("left");
       renderPanel("right", panels, currentActiveSide, detectedDrives, preferences);
+      bindPanel("right");
     }
     if (!settingsBackdrop.hidden && !directorySetDraft)
       renderSettingsCategory();
@@ -392,6 +396,7 @@ async function navigate(
     }
     panel.selected.clear();
     renderPanel(side, panels, currentActiveSide, detectedDrives, preferences);
+    bindPanel(side);
     persistLayout();
     setStatus("Ready");
     return true;
@@ -659,6 +664,7 @@ async function runPanelSearch() {
     panel.selected.clear();
     updateSearchControl();
     renderPanel(side, panels, currentActiveSide, detectedDrives, preferences);
+    bindPanel(side);
     setStatus(
       result.cancelled
         ? `Search cancelled · ${result.results.length} matches`
@@ -695,6 +701,7 @@ window.fileManager.onSearchProgress(
         }),
       );
       renderPanel(side, panels, currentActiveSide, detectedDrives, preferences, { loadThumbnails: false });
+      bindPanel(side);
     }, 120);
   },
 );
@@ -931,6 +938,7 @@ window.fileManager.onDirectoryChanged(({ side, directory }) => {
           panel.selected.delete(selectedPath);
       }
       renderPanel(side, panels, currentActiveSide, detectedDrives, preferences);
+      bindPanel(side);
     })
     .catch(() => {});
 });
@@ -1254,6 +1262,7 @@ function showContextMenu(x, y, side, entry) {
           (result) => result.navigateTo && navigate(side, result.navigateTo),
         ),
   ];
+
   const actions = [
     openAction,
     ["Copy", "Ctrl+C", () => copySelection(side, false)],
@@ -1262,6 +1271,7 @@ function showContextMenu(x, y, side, entry) {
     ["Rename", "", () => renameSelection(side)],
     ["Delete", "Delete", () => deleteSelection(side)],
   ];
+
   if (entry.isDirectory) {
     actions.push([
       "Open in File Explorer",
@@ -1269,6 +1279,7 @@ function showContextMenu(x, y, side, entry) {
       () => window.fileManager.openInFileManager(entry.path),
     ]);
   }
+
   actions.push([
     "Properties",
     "",
