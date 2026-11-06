@@ -76,6 +76,22 @@ export function applyThumbnailSize(panel) {
   const panelEl = getPanelElement(panel.side);
   if (!panelEl) return;
   panelEl.style.setProperty("--icon-size", `${panel.iconSize}px`);
+
+  // Dynamically update live tile and grid sizes
+  const tileSize = panel.iconSize + 48;
+  const iconGrid = panelEl.querySelector(".icon-grid");
+  if (iconGrid) {
+    iconGrid.style.setProperty("--tile-width", `${tileSize}px`);
+  }
+  panelEl.querySelectorAll(".icon-tile").forEach((tile) => {
+    tile.style.width = `${tileSize}px`;
+    tile.style.height = `${tileSize}px`;
+  });
+  panelEl.querySelectorAll(".tile-visual").forEach((visual) => {
+    visual.style.width = `${panel.iconSize}px`;
+    visual.style.height = `${panel.iconSize}px`;
+  });
+
   panelEl.classList.toggle("view-icons", panel.view === "icons");
   panelEl.classList.toggle("view-details", panel.view === "details");
 }

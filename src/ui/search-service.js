@@ -6,8 +6,8 @@ let searchDebounceTimer = null;
 let searchRenderTimer = null;
 
 /**
- * Initializes the search service with the provided configuration.
- * @param {*} config - The configuration object for the search service.
+ * Initializes the search service.
+ * @param {*} config
  */
 export function initSearchService(config) {
   panels = config.panels;
@@ -22,13 +22,6 @@ export function initSearchService(config) {
   searchMode = config.searchMode || document.querySelector("#search-mode");
   searchCancel =
     config.searchCancel || document.querySelector("#search-cancel");
-
-  console.log("Search Service Initialized:", {
-    searchForm: !!searchForm,
-    searchQuery: !!searchQuery,
-    searchMode: !!searchMode,
-    searchCancel: !!searchCancel,
-  });
 
   window.fileManager.onSearchProgress(
     ({ searchId, scanned, matches, results = [] }) => {
@@ -60,13 +53,11 @@ export function initSearchService(config) {
 
   searchForm?.addEventListener("submit", (event) => {
     event.preventDefault();
-    console.log("Search form submitted");
     clearTimeout(searchDebounceTimer);
     runPanelSearch();
   });
 
   searchQuery?.addEventListener("input", () => {
-    console.log("Search input changed:", searchQuery.value);
     updateSearchControl();
     clearTimeout(searchDebounceTimer);
     if (searchQuery.value.trim()) {
@@ -81,7 +72,6 @@ export function initSearchService(config) {
   searchQuery?.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
-      console.log("Search cleared via Escape");
       const activeSide = getActiveSide();
       const panel = panels[activeSide];
       if (panel.searchId) window.fileManager.cancelSearch(panel.searchId);
@@ -92,7 +82,6 @@ export function initSearchService(config) {
   });
 
   searchCancel?.addEventListener("click", () => {
-    console.log("Search cancel button clicked");
     const activeSide = getActiveSide();
     const panel = panels[activeSide];
     if (panel.searchId) window.fileManager.cancelSearch(panel.searchId);
@@ -103,8 +92,8 @@ export function initSearchService(config) {
 }
 
 /**
- * Updates the search control based on the current search state.
- * @returns {void}
+ * Updates the search control UI based on the current search state.
+ * @returns
  */
 export function updateSearchControl() {
   const activeSide = getActiveSide();
@@ -118,23 +107,14 @@ export function updateSearchControl() {
 
 /**
  * Runs the search for the active panel.
- * @returns {Promise<void>}
+ * @returns
  */
 export async function runPanelSearch() {
-  if (!searchQuery) {
-    console.warn("runPanelSearch aborted: searchQuery element is missing");
-    return;
-  }
+  if (!searchQuery) return;
   const activeSide = getActiveSide();
   const side = activeSide;
   const panel = panels[side];
   const query = searchQuery.value.trim();
-  console.log(
-    "Running panel search for query:",
-    query,
-    "on path:",
-    panel?.path,
-  );
   if (!query || !panel.path) return;
 
   if (panel.searchId) window.fileManager.cancelSearch(panel.searchId);
@@ -156,7 +136,6 @@ export async function runPanelSearch() {
       query,
       mode: searchMode ? searchMode.value : "normal",
     });
-    console.log("Search finished:", result);
     if (panel.searchId !== searchId) return;
     panel.searchId = null;
     panel.searchRoot = root;
@@ -177,7 +156,6 @@ export async function runPanelSearch() {
         : `Search complete · ${result.results.length} matches`,
     );
   } catch (error) {
-    console.error("Search error:", error);
     if (panel.searchId !== searchId) return;
     panel.searchId = null;
     panel.searchRoot = null;
@@ -189,9 +167,9 @@ export async function runPanelSearch() {
 
 /**
  * Determines the location of a search result within the search hierarchy.
- * @param {*} entry - The search result entry.
- * @param {*} panel - The panel containing the search results.
- * @returns {string} - The location of the entry relative to the search root.
+ * @param {*} entry
+ * @param {*} panel
+ * @returns
  */
 export function searchLocation(entry, panel) {
   if (!panel.searchRoot) return "";
