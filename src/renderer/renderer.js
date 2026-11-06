@@ -1,3 +1,5 @@
+import { PanelModel } from "../models/PanelModel.js";
+
 // ============================================================================
 // 1. STATE INITIALIZATION & LAYOUT RESTORATION
 // ============================================================================
@@ -7,58 +9,27 @@ try {
 } catch {
   savedLayout = {};
 }
-function restoreColumns(columns) {
-  if (
-    !Array.isArray(columns) ||
-    columns.length !== 3 ||
-    columns.some((width) => !Number.isFinite(width) || width <= 0)
-  )
-    return [58, 17, 25];
-  const total = columns.reduce((sum, width) => sum + width, 0);
-  return columns.map((width) => (width / total) * 100);
-}
-function restoreView(view) {
-  return view === "icons" ? "icons" : "details";
-}
-function restoreIconSize(size) {
-  if (!Number.isFinite(size)) return 48;
-  return Math.max(32, Math.min(160, 32 + Math.round((size - 32) / 8) * 8));
-}
+// function restoreColumns(columns) {
+//   if (
+//     !Array.isArray(columns) ||
+//     columns.length !== 3 ||
+//     columns.some((width) => !Number.isFinite(width) || width <= 0)
+//   )
+//     return [58, 17, 25];
+//   const total = columns.reduce((sum, width) => sum + width, 0);
+//   return columns.map((width) => (width / total) * 100);
+// }
+// function restoreView(view) {
+//   return view === "icons" ? "icons" : "details";
+// }
+// function restoreIconSize(size) {
+//   if (!Number.isFinite(size)) return 48;
+//   return Math.max(32, Math.min(160, 32 + Math.round((size - 32) / 8) * 8));
+// }
+let currentActiveSide = "left";
 const panels = {
-  left: {
-    element: document.querySelector("#panel-left"),
-    path: null,
-    entries: [],
-    selected: new Set(),
-    view: restoreView(savedLayout.left?.view),
-    iconSize: restoreIconSize(savedLayout.left?.iconSize),
-    columns: restoreColumns(savedLayout.left?.columns),
-    sortBy: "name",
-    sortDirection: "asc",
-    history: [],
-    historyIndex: -1,
-    watchPath: null,
-    searchId: null,
-    searchRoot: null,
-    thumbnailGeneration: 0,
-  },
-  right: {
-    element: document.querySelector("#panel-right"),
-    path: null,
-    entries: [],
-    selected: new Set(),
-    view: restoreView(savedLayout.right?.view),
-    iconSize: restoreIconSize(savedLayout.right?.iconSize),
-    columns: restoreColumns(savedLayout.right?.columns),
-    sortBy: "name",
-    sortDirection: "asc",
-    history: [],
-    historyIndex: -1,
-    watchPath: null,
-    searchId: null,
-    searchRoot: null,
-    thumbnailGeneration: 0,
-  },
+  left: new PanelModel("left", savedLayout.left),
+  right: new PanelModel("right", savedLayout.right),
 };
 let layoutInitialized = false;
 let activeSide = "left";
@@ -597,6 +568,10 @@ conflictRenameInput.addEventListener("keydown", (event) => {
 // ============================================================================
 // 9. NAVIGATION & PANEL CORE LOGIC
 // ============================================================================
+function getPanelElement(side) {
+  return document.querySelector(`#panel-${side}`);
+}
+
 async function navigate(
   side,
   directory,
@@ -699,19 +674,19 @@ async function refreshDetectedDrives() {
 }
 function refreshDriveButtonGroups() {
   for (const side of ["left", "right"]) {
-    const group = panels[side].element.querySelector("[data-drive-buttons]");
+    const group = getPanelElement(side).querySelector("[data-drive-buttons]");
     if (!group) continue;
     group.innerHTML = renderDriveButtons(side);
     bindDriveButtons(side);
   }
 }
 function bindDriveButtons(side) {
-  const group = panels[side].element.querySelector("[data-drive-buttons]");
+  const group = getPanelElement(side).querySelector("[data-drive-buttons]");
   group?.querySelectorAll("[data-drive-button]").forEach((button) => {
     button.addEventListener("click", () => {
       activeSide = side;
-      panels.left.element.classList.toggle("is-active", side === "left");
-      panels.right.element.classList.toggle("is-active", side === "right");
+      getPanelElement("left").classList.toggle("is-active", side === "left");
+      getPanelElement("right").classList.toggle("is-active", side === "right");
       updateSummary();
       navigate(side, button.dataset.driveButton);
     });
@@ -719,8 +694,8 @@ function bindDriveButtons(side) {
       event.preventDefault();
       event.stopPropagation();
       activeSide = side;
-      panels.left.element.classList.toggle("is-active", side === "left");
-      panels.right.element.classList.toggle("is-active", side === "right");
+      getPanelElement("left").classList.toggle("is-active", side === "left");
+      getPanelElement("right").classList.toggle("is-active", side === "right");
       updateSummary();
       showDriveContextMenu(
         side,
@@ -833,7 +808,8 @@ window.fileManager.onRestoreDirectoryWatch(({ side, directory }) => {
 });
 function editPanelPath(side) {
   const panel = panels[side];
-  const pathbar = panel.element.querySelector(".pathbar");
+  const panelEl = getPanelElement(side);
+  const pathbar = panelEl.querySelector(".pathbar");
   if (!pathbar || pathbar.querySelector(".path-edit-input")) return;
   pathbar.innerHTML = `<input class="path-edit-input" type="text" aria-label="Current folder path" spellcheck="false" value="${escapeHtml(panel.path || "")}">`;
   pathbar.classList.remove("is-invalid");
@@ -987,9 +963,13 @@ function renderEntries(side) {
 }
 function renderPanel(side, { loadThumbnails = true } = {}) {
   const panel = panels[side];
+  const panelEl = getPanelElement(side);
   const thumbnailGeneration = ++panel.thumbnailGeneration;
-  panel.element.classList.toggle("is-active", activeSide === side);
-  panel.element.innerHTML = `${panelChrome(side)}${renderEntries(side)}<div class="panel-bottom">${panelStatus(panel)}</div>`;
+
+  if (!panelEl) return;
+
+  panelEl.classList.toggle("is-active", currentActiveSide === side);
+  panelEl.innerHTML = `${panelChrome(side)}${renderEntries(side)}<div class="panel-bottom">${panelStatus(panel)}</div>`;
   if (panel.view === "icons") {
     applyThumbnailSize(panel);
     if (loadThumbnails) loadThumbnailImages(side, thumbnailGeneration);
@@ -1122,25 +1102,21 @@ searchCancel.addEventListener("click", () => {
 // 11. THUMBNAILS, STATUS & HISTORY
 // ============================================================================
 function applyThumbnailSize(panel) {
-  const grid = panel.element.querySelector(".icon-grid");
-  if (!grid) return;
-  const tileSize = panel.iconSize + 48;
-  grid.style.setProperty("--tile-width", `${tileSize}px`);
-  grid.querySelectorAll(".icon-tile").forEach((tile) => {
-    tile.style.width = `${tileSize}px`;
-    tile.style.height = `${tileSize}px`;
-  });
-  grid.querySelectorAll(".tile-visual").forEach((visual) => {
-    visual.style.width = `${panel.iconSize}px`;
-    visual.style.height = `${panel.iconSize}px`;
-    const svg = visual.querySelector("svg");
-    svg?.style.setProperty("width", `${panel.iconSize}px`, "important");
-    svg?.style.setProperty("height", `${panel.iconSize}px`, "important");
-  });
+  const panelEl = getPanelElement(panel.side); // Uses panel.side stored in the model
+  if (!panelEl) return;
+
+  panelEl.style.setProperty("--icon-size", `${panel.iconSize}px`);
+
+  // Update view mode classes if applicable
+  panelEl.classList.toggle("view-icons", panel.view === "icons");
+  panelEl.classList.toggle("view-details", panel.view === "details");
 }
+
 async function loadThumbnailImages(side, generation) {
   const panel = panels[side];
-  const tiles = [...panel.element.querySelectorAll(".icon-tile")].filter(
+  const panelEl = getPanelElement(side); // Uses panel.side stored in the model
+  if (!panelEl) return;
+  const tiles = [...panelEl.querySelectorAll(".icon-tile")].filter(
     (tile) => {
       const entry = panel.entries[Number(tile.dataset.entry)];
       return entry && isImageEntry(entry);
@@ -1397,7 +1373,7 @@ async function openDirectorySet(set, activePanel = activeSide) {
 function closeDirectorySetMenu() {
   directorySetMenu.hidden = true;
   if (directorySetMenuSide) {
-    panels[directorySetMenuSide].element
+    getPanelElement(directorySetMenuSide)
       .querySelector('[data-action="directory-sets"]')
       ?.setAttribute("aria-expanded", "false");
   }
@@ -1411,8 +1387,8 @@ function showDirectorySetMenu(side, button) {
   closeDirectorySetMenu();
   directorySetMenuSide = side;
   activeSide = side;
-  panels.left.element.classList.toggle("is-active", side === "left");
-  panels.right.element.classList.toggle("is-active", side === "right");
+  getPanelElement("left").classList.toggle("is-active", side === "left");
+  getPanelElement("right").classList.toggle("is-active", side === "right");
   button.setAttribute("aria-expanded", "true");
   const orderedSets = orderedDirectorySets();
   directorySetMenu.innerHTML = orderedSets.length
@@ -1594,20 +1570,20 @@ async function createFolder(side) {
 
 function bindPanel(side) {
   const panel = panels[side];
-  const element = panel.element;
+  const panelEl = getPanelElement(side);
   bindDriveButtons(side);
-  element
+  panelEl
     .querySelector(".path-home")
     ?.addEventListener("click", () => navigate(side, undefined));
-  element.querySelector(".pathbar")?.addEventListener("click", (event) => {
+  panelEl.querySelector(".pathbar")?.addEventListener("click", (event) => {
     if (event.target === event.currentTarget) editPanelPath(side);
   });
-  element
+  panelEl
     .querySelector('[data-action="directory-sets"]')
     ?.addEventListener("click", (event) => {
       showDirectorySetMenu(side, event.currentTarget);
     });
-  element.querySelectorAll("[data-view]").forEach((button) =>
+  panelEl.querySelectorAll("[data-view]").forEach((button) =>
     button.addEventListener("click", () => {
       const view = button.dataset.view;
       if (panel.view === view) return;
@@ -1618,23 +1594,23 @@ function bindPanel(side) {
       persistLayout();
     }),
   );
-  const sizeSlider = element.querySelector('[data-action="icon-size"]');
+  const sizeSlider = panelEl.querySelector('[data-action="icon-size"]');
   sizeSlider?.addEventListener("input", () => {
     panel.iconSize = Number(sizeSlider.value);
-    element.querySelector("[data-size-value]").textContent = String(
+    panelEl.querySelector("[data-size-value]").textContent = String(
       panel.iconSize,
     );
     applyThumbnailSize(panel);
     persistPanelViews();
     persistLayout();
   });
-  element.querySelectorAll("[data-crumb]").forEach((crumb) =>
+  panelEl.querySelectorAll("[data-crumb]").forEach((crumb) =>
     crumb.addEventListener("click", () => {
       const part = pathParts(panel.path)[Number(crumb.dataset.crumb)];
       if (part) navigate(side, part.path);
     }),
   );
-  element.querySelectorAll("[data-sort]").forEach((heading) =>
+  panelEl.querySelectorAll("[data-sort]").forEach((heading) =>
     heading.addEventListener("click", () => {
       const column = heading.dataset.sort;
       if (panel.sortBy === column)
@@ -1646,7 +1622,7 @@ function bindPanel(side) {
       renderPanel(side);
     }),
   );
-  element.querySelectorAll("[data-column-boundary]").forEach((grip) => {
+  panelEl.querySelectorAll("[data-column-boundary]").forEach((grip) => {
     let startX = 0;
     let startWidths = null;
     const boundary = Number(grip.dataset.columnBoundary);
@@ -1698,7 +1674,7 @@ function bindPanel(side) {
     grip.addEventListener("pointerup", finishResize);
     grip.addEventListener("pointercancel", finishResize);
   });
-  element
+  panelEl
     .querySelectorAll('[data-action="up"]')
     .forEach((button) =>
       button.addEventListener("click", () =>
@@ -1710,19 +1686,19 @@ function bindPanel(side) {
         ),
       ),
     );
-  element.querySelectorAll('[data-action="refresh"]').forEach((button) =>
+  panelEl.querySelectorAll('[data-action="refresh"]').forEach((button) =>
     button.addEventListener("click", () => {
       navigate(side, panel.path);
       refreshDetectedDrives();
     }),
   );
-  element
+  panelEl
     .querySelector('[data-action="match-other"]')
     ?.addEventListener("click", () => {
       const otherSide = side === "left" ? "right" : "left";
       if (panels[otherSide].path) navigate(side, panels[otherSide].path);
     });
-  element.querySelectorAll("[data-entry]").forEach((row) => {
+  panelEl.querySelectorAll("[data-entry]").forEach((row) => {
     const entry = panel.entries[Number(row.dataset.entry)];
     row.addEventListener("click", (event) => {
       activeSide = side;
@@ -1801,21 +1777,21 @@ function bindPanel(side) {
       );
     });
   });
-  element
+  panelEl
     .querySelector(".file-area")
     ?.addEventListener("dragover", (event) => event.preventDefault());
-  element
+  panelEl
     .querySelector(".file-area")
     ?.addEventListener("contextmenu", (event) => {
       if (event.target.closest("[data-entry]")) return;
       event.preventDefault();
       activeSide = side;
-      panels.left.element.classList.toggle("is-active", side === "left");
-      panels.right.element.classList.toggle("is-active", side === "right");
+      getPanelElement("left").classList.toggle("is-active", side === "left");
+      getPanelElement("right").classList.toggle("is-active", side === "right");
       updateSummary();
       showBackgroundContextMenu(event.clientX, event.clientY, side);
     });
-  element
+  panelEl
     .querySelector(".file-area")
     ?.addEventListener("drop", async (event) => {
       if (event.target.closest("[data-entry]")) return;
