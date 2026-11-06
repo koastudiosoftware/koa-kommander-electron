@@ -1,4 +1,5 @@
 import { PanelModel } from "../models/PanelModel.js";
+import { getPanelElement } from "../utils/panel-utils.js";
 
 // ============================================================================
 // 1. STATE INITIALIZATION & LAYOUT RESTORATION
@@ -9,23 +10,6 @@ try {
 } catch {
   savedLayout = {};
 }
-// function restoreColumns(columns) {
-//   if (
-//     !Array.isArray(columns) ||
-//     columns.length !== 3 ||
-//     columns.some((width) => !Number.isFinite(width) || width <= 0)
-//   )
-//     return [58, 17, 25];
-//   const total = columns.reduce((sum, width) => sum + width, 0);
-//   return columns.map((width) => (width / total) * 100);
-// }
-// function restoreView(view) {
-//   return view === "icons" ? "icons" : "details";
-// }
-// function restoreIconSize(size) {
-//   if (!Number.isFinite(size)) return 48;
-//   return Math.max(32, Math.min(160, 32 + Math.round((size - 32) / 8) * 8));
-// }
 let currentActiveSide = "left";
 const panels = {
   left: new PanelModel("left", savedLayout.left),
@@ -568,10 +552,6 @@ conflictRenameInput.addEventListener("keydown", (event) => {
 // ============================================================================
 // 9. NAVIGATION & PANEL CORE LOGIC
 // ============================================================================
-function getPanelElement(side) {
-  return document.querySelector(`#panel-${side}`);
-}
-
 async function navigate(
   side,
   directory,
