@@ -15,6 +15,7 @@ import {
   initPanelInteractionService,
   bindPanel,
   refreshSelection,
+  updateToolbarState,
 } from "./ui/panel-interaction-service.js";
 
 import {
@@ -542,6 +543,10 @@ async function navigate(
     );
     persistLayout(panels, layoutInitialized);
     setStatus("Ready");
+
+    // Update toolbar back/forward button states after successful navigation
+    updateToolbarState(panels, activeSide);
+
     return true;
   } catch (error) {
     if (panel.view === "icons")
@@ -916,9 +921,15 @@ document.addEventListener("click", (event) => {
   if (action === "rename") renameSelection(activeSide);
   if (action === "delete") deleteSelection(activeSide);
   if (action === "new-folder") createFolder(activeSide);
-  if (action === "back") moveHistory(activeSide, -1);
-  if (action === "forward") moveHistory(activeSide, 1);
   if (action === "about") openAbout(aboutBackdrop);
+  if (action === "back") {
+    moveHistory(activeSide, -1);
+    updateToolbarState(panels, activeSide);
+  }
+  if (action === "forward") {
+    moveHistory(activeSide, 1);
+    updateToolbarState(panels, activeSide);
+  }
 });
 
 document.addEventListener("keydown", async (event) => {
@@ -1283,6 +1294,7 @@ async function initialize() {
   await navigate("right", rightExists?.path || start);
   layoutInitialized = true;
   persistLayout(panels, layoutInitialized);
+  updateToolbarState(panels, activeSide);
 }
 
 initialize();

@@ -82,7 +82,9 @@ body {
   background: #eff6ff;
 }
 .brand-name {
-  font: 800 17px Manrope, sans-serif;
+  font:
+    800 17px Manrope,
+    sans-serif;
   letter-spacing: -0.8px;
   color: #0f172a;
 }
@@ -109,7 +111,9 @@ body {
   font-size: 11px;
 }
 kbd {
-  font: 600 10px "DM Sans", sans-serif;
+  font:
+    600 10px "DM Sans",
+    sans-serif;
   color: #475569;
   background: #f8fafc;
   border: 1px solid #cbd5e1;
@@ -137,7 +141,9 @@ kbd {
 }
 .panel.is-active {
   border-color: #3b82f6;
-  box-shadow: 0 0 0 1px #3b82f626, 0 2px 9px #0f172a08;
+  box-shadow:
+    0 0 0 1px #3b82f626,
+    0 2px 9px #0f172a08;
 }
 .splitter {
   width: 16px;
@@ -180,7 +186,9 @@ kbd {
 .panel-title {
   flex: 1;
   min-width: 0;
-  font: 700 15px Manrope, sans-serif;
+  font:
+    700 15px Manrope,
+    sans-serif;
   letter-spacing: -0.35px;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -203,7 +211,9 @@ kbd {
   background: transparent;
   color: #64748b;
   cursor: pointer;
-  font: 500 11px "DM Sans", sans-serif;
+  font:
+    500 11px "DM Sans",
+    sans-serif;
 }
 .icon-button:hover,
 .toolbar-button:hover {
@@ -309,7 +319,8 @@ kbd {
   stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: invert(33%) sepia(12%) saturate(500%) hue-rotate(180deg) brightness(90%) contrast(90%);
+  filter: invert(33%) sepia(12%) saturate(500%) hue-rotate(180deg)
+    brightness(90%) contrast(90%);
 }
 .view-button.active {
   background: #ffffff;
@@ -413,7 +424,8 @@ kbd {
   color: #64748b;
 }
 .file-icon img {
-  filter: invert(33%) sepia(12%) saturate(500%) hue-rotate(180deg) brightness(90%) contrast(90%);
+  filter: invert(33%) sepia(12%) saturate(500%) hue-rotate(180deg)
+    brightness(90%) contrast(90%);
 }
 .file-icon svg {
   width: 18px;
@@ -426,23 +438,28 @@ kbd {
 }
 .file-icon.folder {
   color: #d97706;
-  filter: invert(50%) sepia(85%) saturate(1000%) hue-rotate(5deg) brightness(95%) contrast(95%);
+  filter: invert(50%) sepia(85%) saturate(1000%) hue-rotate(5deg)
+    brightness(95%) contrast(95%);
 }
 .file-icon.image {
   color: #0284c7;
-  filter: invert(40%) sepia(85%) saturate(1400%) hue-rotate(185deg) brightness(95%) contrast(95%);
+  filter: invert(40%) sepia(85%) saturate(1400%) hue-rotate(185deg)
+    brightness(95%) contrast(95%);
 }
 .file-icon.pdf {
   color: #e11d48;
-  filter: invert(25%) sepia(85%) saturate(3000%) hue-rotate(335deg) brightness(90%) contrast(95%);
+  filter: invert(25%) sepia(85%) saturate(3000%) hue-rotate(335deg)
+    brightness(90%) contrast(95%);
 }
 .file-icon.code {
   color: #2563eb;
-  filter: invert(35%) sepia(90%) saturate(1800%) hue-rotate(210deg) brightness(95%) contrast(95%);
+  filter: invert(35%) sepia(90%) saturate(1800%) hue-rotate(210deg)
+    brightness(95%) contrast(95%);
 }
 .file-icon.archive {
   color: #475569;
-  filter: invert(30%) sepia(15%) saturate(800%) hue-rotate(180deg) brightness(90%) contrast(90%);
+  filter: invert(30%) sepia(15%) saturate(800%) hue-rotate(180deg)
+    brightness(90%) contrast(90%);
 }
 .date-cell {
   color: #64748b !important;
@@ -466,7 +483,8 @@ kbd {
   stroke: currentColor;
   fill: none;
   stroke-width: 1.4;
-  filter: invert(60%) sepia(20%) saturate(800%) hue-rotate(190deg) brightness(90%) contrast(90%);
+  filter: invert(60%) sepia(20%) saturate(800%) hue-rotate(190deg)
+    brightness(90%) contrast(90%);
 }
 .empty-state strong {
   font-size: 12px;
@@ -518,27 +536,33 @@ kbd {
 }
 .tile-visual.file {
   color: #64748b;
-  filter: invert(33%) sepia(12%) saturate(500%) hue-rotate(180deg) brightness(90%) contrast(90%);
+  filter: invert(33%) sepia(12%) saturate(500%) hue-rotate(180deg)
+    brightness(90%) contrast(90%);
 }
 .tile-visual.folder {
   color: #d97706;
-  filter: invert(50%) sepia(85%) saturate(1000%) hue-rotate(5deg) brightness(95%) contrast(95%);
+  filter: invert(50%) sepia(85%) saturate(1000%) hue-rotate(5deg)
+    brightness(95%) contrast(95%);
 }
 .tile-visual.image img:not(.thumbnail-image) {
   color: #0284c7;
-  filter: invert(40%) sepia(85%) saturate(1400%) hue-rotate(185deg) brightness(95%) contrast(95%);
+  filter: invert(40%) sepia(85%) saturate(1400%) hue-rotate(185deg)
+    brightness(95%) contrast(95%);
 }
 .tile-visual.pdf {
   color: #e11d48;
-  filter: invert(25%) sepia(85%) saturate(3000%) hue-rotate(335deg) brightness(90%) contrast(95%);
+  filter: invert(25%) sepia(85%) saturate(3000%) hue-rotate(335deg)
+    brightness(90%) contrast(95%);
 }
 .tile-visual.code {
   color: #2563eb;
-  filter: invert(35%) sepia(90%) saturate(1800%) hue-rotate(210deg) brightness(95%) contrast(95%);
+  filter: invert(35%) sepia(90%) saturate(1800%) hue-rotate(210deg)
+    brightness(95%) contrast(95%);
 }
 .tile-visual.archive {
   color: #475569;
-  filter: invert(30%) sepia(15%) saturate(800%) hue-rotate(180deg) brightness(90%) contrast(90%);
+  filter: invert(30%) sepia(15%) saturate(800%) hue-rotate(180deg)
+    brightness(90%) contrast(90%);
 }
 .tile-name {
   width: 100%;
@@ -696,7 +720,8 @@ kbd {
 }
 
 .dummy-tool img {
-  filter: invert(33%) sepia(12%) saturate(500%) hue-rotate(180deg) brightness(90%) contrast(90%);
+  filter: invert(33%) sepia(12%) saturate(500%) hue-rotate(180deg)
+    brightness(90%) contrast(90%);
 }
 
 .tool-divider {
@@ -780,7 +805,8 @@ kbd {
   width: 16px;
   height: 16px;
   object-fit: contain;
-  filter: invert(33%) sepia(12%) saturate(500%) hue-rotate(180deg) brightness(90%) contrast(90%);
+  filter: invert(33%) sepia(12%) saturate(500%) hue-rotate(180deg)
+    brightness(90%) contrast(90%);
 }
 
 .dummy-tool {
@@ -1080,7 +1106,10 @@ kbd {
   background: transparent;
   text-align: left;
   color: #475569;
-  font: 500 12px "Segoe UI", Arial, sans-serif;
+  font:
+    500 12px "Segoe UI",
+    Arial,
+    sans-serif;
   cursor: pointer;
 }
 .settings-category:hover {
@@ -1157,7 +1186,10 @@ kbd {
   border-radius: 5px;
   background: #ffffff;
   color: #1e293b;
-  font: 12px "Segoe UI", Arial, sans-serif;
+  font:
+    12px "Segoe UI",
+    Arial,
+    sans-serif;
   outline: none; /* Removes default Chromium orange focus ring */
 }
 
@@ -1176,7 +1208,10 @@ kbd {
   border-radius: 5px;
   background: #eff6ff;
   color: #1d4ed8;
-  font: 600 11px "Segoe UI", Arial, sans-serif;
+  font:
+    600 11px "Segoe UI",
+    Arial,
+    sans-serif;
   cursor: pointer;
 }
 .settings-primary:hover {
@@ -1385,7 +1420,10 @@ kbd {
   border-radius: 6px;
   background: #ffffff;
   color: #334155;
-  font: 600 11px "Segoe UI", Arial, sans-serif;
+  font:
+    600 11px "Segoe UI",
+    Arial,
+    sans-serif;
   cursor: pointer;
 }
 .conflict-choice:hover {
@@ -1437,7 +1475,10 @@ kbd {
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   color: #0f172a;
-  font: 11px "Segoe UI", Arial, sans-serif;
+  font:
+    11px "Segoe UI",
+    Arial,
+    sans-serif;
 }
 .conflict-rename .conflict-choice {
   min-height: 34px;
@@ -1527,7 +1568,10 @@ kbd {
   background: #ffffff;
   text-align: left;
   color: #1e293b;
-  font: 11px "Segoe UI", Arial, sans-serif;
+  font:
+    11px "Segoe UI",
+    Arial,
+    sans-serif;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1595,7 +1639,10 @@ kbd {
   border-radius: 4px;
   background: #ffffff;
   color: #475569;
-  font: 500 10px "Segoe UI", Arial, sans-serif;
+  font:
+    500 10px "Segoe UI",
+    Arial,
+    sans-serif;
   cursor: pointer;
 }
 .settings-secondary {
@@ -1627,7 +1674,10 @@ kbd {
   border-radius: 5px;
   background: #ffffff;
   color: #1e293b;
-  font: 11px "Segoe UI", Arial, sans-serif;
+  font:
+    11px "Segoe UI",
+    Arial,
+    sans-serif;
 }
 .directory-path-input {
   display: flex;
@@ -1654,7 +1704,10 @@ kbd {
   border-radius: 5px;
   background: #ffffff;
   color: #1e293b;
-  font: 11px "Segoe UI", Arial, sans-serif;
+  font:
+    11px "Segoe UI",
+    Arial,
+    sans-serif;
 }
 .thumbnail-cache-field .settings-hint span {
   display: block;
@@ -1677,7 +1730,10 @@ kbd {
   border-radius: 4px;
   background: #ffffff;
   color: #475569;
-  font: 10px "Segoe UI", Arial, sans-serif;
+  font:
+    10px "Segoe UI",
+    Arial,
+    sans-serif;
   cursor: pointer;
 }
 .directory-path-input button:hover {
@@ -1722,7 +1778,8 @@ kbd {
 .directory-set-trigger .svg-icon {
   width: 14px;
   height: 14px;
-  filter: invert(33%) sepia(12%) saturate(500%) hue-rotate(180deg) brightness(90%) contrast(90%);
+  filter: invert(33%) sepia(12%) saturate(500%) hue-rotate(180deg)
+    brightness(90%) contrast(90%);
 }
 .directory-set-trigger span {
   font-size: 10px;
@@ -1877,7 +1934,10 @@ kbd {
   background: #ffffff;
   color: #1e293b;
   text-align: left;
-  font: 11px "Segoe UI", Arial, sans-serif;
+  font:
+    11px "Segoe UI",
+    Arial,
+    sans-serif;
   cursor: pointer;
 }
 .drive-context-menu button:hover:not(:disabled) {
@@ -1935,7 +1995,10 @@ kbd {
   border-radius: 5px;
   background: #ffffff;
   color: #1e293b;
-  font: 12px "Segoe UI", Arial, sans-serif;
+  font:
+    12px "Segoe UI",
+    Arial,
+    sans-serif;
 }
 .name-dialog input:focus {
   outline: 2px solid #3b82f6;
@@ -2092,7 +2155,10 @@ kbd {
   outline: 0;
   background: transparent;
   color: #475569;
-  font: 10px "Segoe UI", Arial, sans-serif;
+  font:
+    10px "Segoe UI",
+    Arial,
+    sans-serif;
   cursor: pointer;
 }
 .global-search input {
@@ -2103,7 +2169,10 @@ kbd {
   outline: 0;
   background: transparent;
   color: #0f172a;
-  font: 11px "Segoe UI", Arial, sans-serif;
+  font:
+    11px "Segoe UI",
+    Arial,
+    sans-serif;
 }
 .global-search input::placeholder {
   color: #94a3b8;
@@ -2338,54 +2407,49 @@ kbd {
   color: #94a3b8;
 }
 
+:root[data-theme="dark"] .column-sort:hover {
+  color: #f3f4f5;
+}
+:root[data-theme="dark"] .dummy-tool:hover {
+  background-color: #334155;
+}
 
+:root[data-theme="dark"] .dummy-tool img {
+  filter: invert(100%) sepia(38%) saturate(274%) hue-rotate(175deg)
+    brightness(100%) contrast(92%);
+}
 
-  :root[data-theme="dark"] .column-sort:hover {
-    color: #f3f4f5;
-  }
-  :root[data-theme="dark"] .dummy-tool:hover {
-    background-color: #334155;
-  }
+:root[data-theme="dark"] .toolbar-button .svg-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  filter: invert(100%) sepia(38%) saturate(274%) hue-rotate(175deg)
+    brightness(100%) contrast(92%);
+}
+:root[data-theme="dark"] .view-button img {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: invert(100%) sepia(38%) saturate(274%) hue-rotate(175deg)
+    brightness(100%) contrast(92%);
+}
 
-  :root[data-theme="dark"] .dummy-tool img {
-    filter: invert(100%) sepia(38%) saturate(274%) hue-rotate(175deg) brightness(100%) contrast(92%);
-  }
+:root[data-theme="dark"] .setting-field select {
+  background: #0f172a;
+  border-color: #334155;
+  color: #f1f5f9;
+  outline: none;
+}
 
-  :root[data-theme="dark"] .toolbar-button .svg-icon {
-    width: 16px;
-    height: 16px;
-    object-fit: contain;
-    filter: invert(100%) sepia(38%) saturate(274%) hue-rotate(175deg) brightness(100%) contrast(92%);
-  }
-  :root[data-theme="dark"] .view-button img {
-    width: 13px;
-    height: 13px;
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 1.7;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    filter: invert(100%) sepia(38%) saturate(274%) hue-rotate(175deg) brightness(100%) contrast(92%);
-  }
-
-  :root[data-theme="dark"] .setting-field select {
-    background: #0f172a;
-    border-color: #334155;
-    color: #f1f5f9;
-    outline: none;
-  }
-
-  :root[data-theme="dark"] .setting-field select:focus,
-  :root[data-theme="dark"] .setting-field select:focus-visible {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px #3b82f640;
-  }
-
-
-
-
-
-
+:root[data-theme="dark"] .setting-field select:focus,
+:root[data-theme="dark"] .setting-field select:focus-visible {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px #3b82f640;
+}
 
 :root[data-theme="dark"] .directory-set-field input,
 :root[data-theme="dark"] .directory-set-field select,
@@ -2527,7 +2591,11 @@ kbd {
     background: #1e3a8a80;
     border-color: #3b82f6;
   }
-  :root[data-theme="system"] .panel:not(.is-active) .file-list tbody tr.selected,
+  :root[data-theme="system"]
+    .panel:not(.is-active)
+    .file-list
+    tbody
+    tr.selected,
   :root[data-theme="system"] .panel:not(.is-active) .icon-tile.selected {
     background: #33415580;
     border-color: #475569;

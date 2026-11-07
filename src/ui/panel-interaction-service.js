@@ -391,3 +391,26 @@ export function bindPanel(
       await handleDrop(event, side, panel.path);
     });
 }
+
+/**
+ * Updates the enabled state of the back and forward toolbar buttons.
+ * @param {Object} panels - The panel state for each side.
+ * @param {string} activeSide - The active panel side.
+ */
+export function updateToolbarState(panels, activeSide) {
+  const panel = panels[activeSide];
+  const backBtn = document.querySelector('[data-action="back"]');
+  const forwardBtn = document.querySelector('[data-action="forward"]');
+
+  if (backBtn) {
+    const canBack = panel && panel.historyIndex > 0;
+    backBtn.disabled = !canBack;
+  }
+  if (forwardBtn) {
+    const canForward =
+      panel &&
+      panel.historyIndex >= 0 &&
+      panel.historyIndex < panel.history.length - 1;
+    forwardBtn.disabled = !canForward;
+  }
+}
