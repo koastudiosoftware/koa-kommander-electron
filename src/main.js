@@ -18,6 +18,10 @@ let windowsDriveMetadataPending = null;
 const maxThumbnailPixels = 192;
 const thumbnailCachePrefix = 'koa-thumbnail-';
 
+/**
+ * Retrieves the current Git commit count.
+ * @returns The Git commit count, or null if unavailable.
+ */
 function getGitCommitCount() {
   try {
     const count = execFileSync('git', ['rev-list', '--count', 'HEAD'], {
@@ -31,6 +35,11 @@ function getGitCommitCount() {
   }
 }
 
+/**
+ * Expands environment variables in a value.
+ * @param {*} value The value to expand.
+ * @returns The expanded value.
+ */
 function expandEnvironmentVariables(value) {
   if (typeof value !== 'string') return value;
   return value.replace(/%([^%]+)%/g, (placeholder, name) => {
@@ -43,10 +52,21 @@ function expandEnvironmentVariables(value) {
   });
 }
 
+/**
+ * Resolves a path and expands environment variables.
+ * @param {*} value The path to resolve.
+ * @returns The resolved path.
+ */
 function resolvePath(value) {
   return path.resolve(expandEnvironmentVariables(value));
 }
 
+/**
+ * Runs a PowerShell script.
+ * @param {*} script The PowerShell script to run.
+ * @param {*} env The environment variables to use.
+ * @returns The PowerShell script output.
+ */
 function runPowerShell(script, env = {}) {
   return new Promise((resolve, reject) => {
     execFile('powershell.exe', ['-NoProfile', '-Command', script], {
@@ -61,10 +81,23 @@ function runPowerShell(script, env = {}) {
   });
 }
 
+/**
+ * Creates a key for tracking a folder size scan.
+ * @param {*} webContentsId The window's web contents ID.
+ * @param {*} requestId The scan request ID.
+ * @returns The folder size scan key.
+ */
 function folderSizeScanKey(webContentsId, requestId) {
   return `${webContentsId}:${requestId}`;
 }
 
+/**
+ * Scans a folder and calculates its size.
+ * @param {*} rootPath The root folder path.
+ * @param {*} scan The scan state.
+ * @param {*} sendProgress The progress callback.
+ * @returns The folder size scan result.
+ */
 async function scanFolderSize(rootPath, scan, sendProgress) {
   const pendingDirectories = [rootPath];
   let totalBytes = 0;
@@ -112,6 +145,11 @@ async function scanFolderSize(rootPath, scan, sendProgress) {
   return { cancelled: false, totalBytes, fileCount, folderCount };
 }
 
+/**
+ * Retrieves Windows drive metadata.
+ * @param {boolean} forceRefresh Whether to force a metadata refresh.
+ * @returns The Windows drive metadata.
+ */
 async function getWindowsDriveMetadata(forceRefresh = false) {
   if (!forceRefresh && Date.now() - windowsDriveMetadataCache.loadedAt < 1500) return windowsDriveMetadataCache.drives;
   if (windowsDriveMetadataPending) return windowsDriveMetadataPending;
@@ -131,12 +169,22 @@ async function getWindowsDriveMetadata(forceRefresh = false) {
   finally { windowsDriveMetadataPending = null; }
 }
 
+/**
+ * Retrieves the thumbnail cache directory.
+ * @param {*} directory The configured thumbnail cache directory.
+ * @returns The thumbnail cache directory.
+ */
 function thumbnailCacheDirectory(directory) {
   return typeof directory === 'string' && directory.trim()
     ? resolvePath(directory)
     : path.join(app.getPath('userData'), 'thumbnail-cache');
 }
 
+/**
+ * Closes a directory watcher.
+ * @param {*} key The directory watcher key.
+ * @returns Nothing.
+ */
 function closeDirectoryWatcher(key) {
   const record = directoryWatchers.get(key);
   if (!record) return;
@@ -145,12 +193,21 @@ function closeDirectoryWatcher(key) {
   directoryWatchers.delete(key);
 }
 
+/**
+ * Closes all directory watchers for a window.
+ * @param {*} webContentsId The window's web contents ID.
+ * @returns Nothing.
+ */
 function closeWindowWatchers(webContentsId) {
   for (const [key, record] of directoryWatchers) {
     if (record.webContentsId === webContentsId) closeDirectoryWatcher(key);
   }
 }
 
+/**
+ * Retrieves the saved window state.
+ * @returns The saved window state.
+ */
 function readWindowState() {
   try {
     const statePath = path.join(app.getPath('userData'), 'window-state.json');
@@ -165,6 +222,11 @@ function readWindowState() {
   }
 }
 
+/**
+ * Saves the current window state.
+ * @param {*} win The window to save.
+ * @returns Nothing.
+ */
 function saveWindowState(win) {
   if (win.isDestroyed()) return;
   const { width, height } = win.getNormalBounds();
@@ -177,6 +239,10 @@ function saveWindowState(win) {
   }
 }
 
+/**
+ * Retrieves the application version information.
+ * @returns The application version information.
+ */
 ipcMain.handle('app:version-info', () => {
   const packageVersion = app.getVersion();
   const majorMinor = packageVersion.match(/^(\d+)\.(\d+)/);
@@ -187,6 +253,10 @@ ipcMain.handle('app:version-info', () => {
   return { version, commitCount };
 });
 
+/**
+ * Creates the main application window.
+ * @returns The main application window.
+ */
 function createWindow() {
   const windowState = readWindowState();
   const windowIcon = nativeImage.createFromPath(
@@ -232,7 +302,7 @@ function createWindow() {
   if (windowState.maximized) win.maximize();
 
   Menu.setApplicationMenu(null);
-  win.loadFile(path.join(__dirname, "renderer", "index.html"));
+  win.loadFile(path.join(__dirname, "index.html"));
   win.webContents.once("destroyed", () =>
     closeWindowWatchers(win.webContents.id),
   );
@@ -252,6 +322,12 @@ function createWindow() {
   return win;
 }
 
+/**
+ * Retrieves file information for a directory entry.
+ * @param {*} entry The directory entry.
+ * @param {*} parent The parent directory path.
+ * @returns File information for the directory entry.
+ */
 function fileInfo(entry, parent) {
   const fullPath = path.join(parent, entry.name);
   return {
@@ -262,6 +338,11 @@ function fileInfo(entry, parent) {
   };
 }
 
+/**
+ * Retrieves transfer information for a file or directory.
+ * @param {*} fullPath The full path to the file or directory.
+ * @returns Transfer information for the file or directory.
+ */
 async function transferInfo(fullPath) {
   const stats = await fs.stat(fullPath);
   return {
@@ -339,6 +420,12 @@ ipcMain.handle('fs:eject-drive', async (_event, driveRoot) => {
   }
 });
 
+/**
+ * Creates a matcher for the given search query and mode.
+ * @param {*} query The search query.
+ * @param {*} mode The search mode.
+ * @returns A matcher for the query.
+ */
 function createSearchMatcher(query, mode) {
   if (!query) throw new Error('Enter a name to search for.');
   if (mode === 'regex') {
@@ -700,6 +787,7 @@ ipcMain.handle('fs:delete', async (event, { entries, confirm }) => {
   }
   return { cancelled: false, permanent, results };
 });
+
 ipcMain.handle('fs:open', async (_event, itemPath) => {
   const resolved = resolvePath(itemPath);
   const stats = await fs.stat(resolved);
@@ -786,6 +874,7 @@ ipcMain.handle('fs:rename', async (_event, { source: rawSource, name: rawName })
   await fs.rename(source, destination);
   return destination;
 });
+
 if (!hasSingleInstanceLock) {
   app.quit();
 } else {
@@ -806,5 +895,3 @@ if (!hasSingleInstanceLock) {
     if (process.platform !== 'darwin') app.quit();
   });
 }
-
-

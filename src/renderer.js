@@ -1,22 +1,22 @@
-import { PanelModel } from "../models/PanelModel.js";
-import { initSearchService } from "../ui/search-service.js";
-import { renderPanel } from "../ui/panel-renderer.js";
-import { initLayoutService, setPanelRatio } from "../ui/layout-service.js";
+import { PanelModel } from "./models/PanelModel.js";
+import { initSearchService } from "./ui/search-service.js";
+import { renderPanel } from "./ui/panel-renderer.js";
+import { initLayoutService, setPanelRatio } from "./ui/layout-service.js";
 
 import {
   loadLayout,
   loadPreferences,
   persistLayout,
   persistPreferences,
-} from "../utils/storage-utils.js";
+} from "./utils/storage-utils.js";
 
 import {
   initPanelInteractionService,
   bindPanel,
   refreshSelection,
-} from "../ui/panel-interaction-service.js";
+} from "./ui/panel-interaction-service.js";
 
-import { formatSize, setStatus, toast } from "../utils/panel-utils.js";
+import { formatSize, setStatus, toast } from "./utils/panel-utils.js";
 
 import {
   copySelection,
@@ -26,7 +26,7 @@ import {
   pasteSelection,
   renameSelection,
   transferWithConflicts,
-} from "../ui/context-menu-service.js";
+} from "./ui/context-menu-service.js";
 
 import {
   initDialogsService,
@@ -37,7 +37,7 @@ import {
   finishConflictDecision,
   askForName,
   finishNameDialog,
-} from "../ui/dialogs-service.js";
+} from "./ui/dialogs-service.js";
 
 import {
   initSettingsService,
@@ -48,7 +48,7 @@ import {
   openDirectorySet,
   renderDirectorySets,
   switchCategory,
-} from "../ui/settings-service.js";
+} from "./ui/settings-service.js";
 
 import {
   clearRightDropTargets,
@@ -59,14 +59,14 @@ import {
   getSuppressRightContextUntil,
   isDraggingCandidate,
   executeDropAction,
-} from "../ui/drag-drop-service.js";
+} from "./ui/drag-drop-service.js";
 
 import {
   bindDriveButtons,
   initDrivesService,
   refreshDetectedDrives,
   refreshDriveButtonGroups,
-} from "../ui/drives-service.js";
+} from "./ui/drives-service.js";
 
 import {
   applyThumbnailSize,
@@ -75,7 +75,7 @@ import {
   updateSummary,
   moveHistory,
   bindHistoryLongPress,
-} from "../ui/thumbnail-history-service.js";
+} from "./ui/thumbnail-history-service.js";
 
 // ============================================================================
 // 1. STATE INITIALIZATION & LAYOUT RESTORATION

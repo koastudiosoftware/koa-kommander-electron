@@ -10,24 +10,24 @@
 <body>
   <header class="app-header">
     <div class="tool-row" aria-label="Toolbar">
-      <button class="dummy-tool" data-action="new-folder" title="New folder" aria-label="New folder"><img class="svg-icon" src="../assets/material-icons_create_new_folder.svg" alt="" aria-hidden="true" draggable="false"></button>
+      <button class="dummy-tool" data-action="new-folder" title="New folder" aria-label="New folder"><img class="svg-icon" src="./assets/material-icons_create_new_folder.svg" alt="" aria-hidden="true" draggable="false"></button>
       <span class="tool-divider"></span>
-      <button class="dummy-tool" data-action="back" title="Back" aria-label="Back" disabled><img class="svg-icon" src="../assets/material-icons_arrow_back.svg" alt="" aria-hidden="true" draggable="false"></button>
-      <button class="dummy-tool" data-action="forward" title="Forward" aria-label="Forward" disabled><img class="svg-icon" src="../assets/material-icons_arrow_forward.svg" alt="" aria-hidden="true" draggable="false"></button>
+      <button class="dummy-tool" data-action="back" title="Back" aria-label="Back" disabled><img class="svg-icon" src="./assets/material-icons_arrow_back.svg" alt="" aria-hidden="true" draggable="false"></button>
+      <button class="dummy-tool" data-action="forward" title="Forward" aria-label="Forward" disabled><img class="svg-icon" src="./assets/material-icons_arrow_forward.svg" alt="" aria-hidden="true" draggable="false"></button>
       <span class="tool-divider"></span>
-      <button class="dummy-tool" data-action="copy" title="Copy (Ctrl+C)" aria-label="Copy"><img class="svg-icon" src="../assets/material-icons_file_copy.svg" alt="" aria-hidden="true" draggable="false"></button>
-      <button class="dummy-tool" data-action="cut" title="Cut (Ctrl+X)" aria-label="Cut"><img class="svg-icon" src="../assets/material-icons_content_cut.svg" alt="" aria-hidden="true" draggable="false"></button>
-      <button class="dummy-tool" data-action="paste" title="Paste (Ctrl+V)" aria-label="Paste"><img class="svg-icon" src="../assets/material-icons_content_paste.svg" alt="" aria-hidden="true" draggable="false"></button>
-      <button class="dummy-tool" data-action="rename" title="Rename selected item" aria-label="Rename"><img class="svg-icon" src="../assets/material-icons_drive_file_rename_outline.svg" alt="" aria-hidden="true" draggable="false"></button>
-      <button class="dummy-tool" data-action="delete" title="Delete (Delete)" aria-label="Delete"><img class="svg-icon" src="../assets/material-icons_delete.svg" alt="" aria-hidden="true" draggable="false"></button>
+      <button class="dummy-tool" data-action="copy" title="Copy (Ctrl+C)" aria-label="Copy"><img class="svg-icon" src="./assets/material-icons_file_copy.svg" alt="" aria-hidden="true" draggable="false"></button>
+      <button class="dummy-tool" data-action="cut" title="Cut (Ctrl+X)" aria-label="Cut"><img class="svg-icon" src="./assets/material-icons_content_cut.svg" alt="" aria-hidden="true" draggable="false"></button>
+      <button class="dummy-tool" data-action="paste" title="Paste (Ctrl+V)" aria-label="Paste"><img class="svg-icon" src="./assets/material-icons_content_paste.svg" alt="" aria-hidden="true" draggable="false"></button>
+      <button class="dummy-tool" data-action="rename" title="Rename selected item" aria-label="Rename"><img class="svg-icon" src="./assets/material-icons_drive_file_rename_outline.svg" alt="" aria-hidden="true" draggable="false"></button>
+      <button class="dummy-tool" data-action="delete" title="Delete (Delete)" aria-label="Delete"><img class="svg-icon" src="./assets/material-icons_delete.svg" alt="" aria-hidden="true" draggable="false"></button>
       <span class="tool-spacer"></span>
       <form class="global-search" id="global-search" role="search">
         <label class="search-mode-wrap" aria-label="Search matching style"><span aria-hidden="true">⌕</span><select id="search-mode" aria-label="Search matching style"><option value="partial">Name</option><option value="glob">Glob</option><option value="regex">Regex</option></select></label>
         <input id="search-query" type="search" placeholder="Search active panel…" aria-label="Search file names recursively" autocomplete="off" spellcheck="false">
         <button type="button" id="search-cancel" aria-label="Cancel search" title="Cancel search" hidden>×</button>
       </form>
-      <button class="dummy-tool" id="settings-button" title="Settings" aria-label="Settings"><img class="svg-icon" src="../assets/material-icons_settings.svg" alt="" aria-hidden="true" draggable="false"></button>
-      <button class="dummy-tool" id="about-button" data-action="about" title="About Koa Kommander" aria-label="About Koa Kommander"><img class="svg-icon" src="../assets/material-icons_info.svg" alt="" aria-hidden="true" draggable="false"></button>
+      <button class="dummy-tool" id="settings-button" title="Settings" aria-label="Settings"><img class="svg-icon" src="./assets/material-icons_settings.svg" alt="" aria-hidden="true" draggable="false"></button>
+      <button class="dummy-tool" id="about-button" data-action="about" title="About Koa Kommander" aria-label="About Koa Kommander"><img class="svg-icon" src="./assets/material-icons_info.svg" alt="" aria-hidden="true" draggable="false"></button>
     </div>
   </header>
 
@@ -86,7 +86,7 @@
   <div class="about-backdrop" id="about-backdrop" hidden>
     <section class="about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title">
       <button class="settings-close about-close" id="about-close" aria-label="Close About" title="Close">×</button>
-      <img src="../assets/koa-kommander-icon.png" alt="Koa Kommander icon">
+      <img src="./assets/koa-kommander-icon.png" alt="Koa Kommander icon">
       <h2 id="about-title">Koa Kommander</h2>
       <p id="about-version">Version</p>
       <p>A focused dual-panel file manager for Windows.</p>

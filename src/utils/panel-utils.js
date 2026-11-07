@@ -5,25 +5,19 @@
  */
 export const actionIcon = (name) => {
   const paths = {
-    sets: '<img class="svg-icon" src="../assets/material-icons_folder_special.svg" alt="" aria-hidden="true" draggable="false">',
-    "new-folder":
-      '<img class="svg-icon" src="../assets/material-icons_create_new_folder.svg" alt="" aria-hidden="true" draggable="false">',
-    up: '<img class="svg-icon" src="../assets/material-icons_arrow_upward.svg" alt="" aria-hidden="true" draggable="false">',
-    refresh:
-      '<img class="svg-icon" src="../assets/material-icons_refresh.svg" alt="" aria-hidden="true" draggable="false">',
-    left: '<img class="svg-icon" src="../assets/material-icons_keyboard_arrow_left.svg" alt="" aria-hidden="true" draggable="false">',
-    right:
-      '<img class="svg-icon" src="../assets/material-icons_keyboard_arrow_right.svg" alt="" aria-hidden="true" draggable="false">',
-    copy: '<img class="svg-icon" src="../assets/material-icons_file_copy.svg" alt="" aria-hi  dden="true" draggable="false">',
-    cut: '<img class="svg-icon" src="../assets/material-icons_content_cut.svg" alt="" aria-hidden="true" draggable="false">',
-    paste:
-      '<img class="svg-icon" src="../assets/material-icons_content_paste.svg" alt="" aria-hidden="true" draggable="false">',
-    rename:
-      '<img class="svg-icon" src="../assets/material-icons_drive_file_rename_outline.svg" alt="" aria-hidden="true" draggable="false">',
-    delete:
-      '<img class="svg-icon" src="../assets/material-icons_delete.svg" alt="" aria-hidden="true" draggable="false">',
+    sets: 'material-icons_folder_special.svg',
+    "new-folder": 'material-icons_create_new_folder.svg',
+    up: 'material-icons_arrow_upward.svg',
+    refresh: 'material-icons_refresh.svg',
+    left: 'material-icons_keyboard_arrow_left.svg',
+    right: 'material-icons_keyboard_arrow_right.svg',
+    copy: 'material-icons_file_copy.svg',
+    cut: 'material-icons_content_cut.svg',
+    paste: 'material-icons_content_paste.svg',
+    rename: 'material-icons_drive_file_rename_outline.svg',
+    delete: 'material-icons_delete.svg',
   };
-  return `${paths[name]}`;
+  return `<img class="svg-icon" src="./assets/${paths[name]}" alt="" aria-hidden="true" draggable="false">`;
 };
 
 /**
@@ -124,8 +118,8 @@ export function getPanelElement(side) {
  */
 export function gridIcon(type) {
   return type === "details"
-    ? '<img class="svg-icon" src="../assets/bootstrap-list-task.svg" alt="" aria-hidden="true" draggable="false">'
-    : '<img class="svg-icon" src="../assets/material-icons_grid_view.svg" alt="" aria-hidden="true" draggable="false">';
+    ? '<img class="svg-icon" src="./assets/bootstrap-list-task.svg" alt="" aria-hidden="true" draggable="false">'
+    : '<img class="svg-icon" src="./assets/material-icons_grid_view.svg" alt="" aria-hidden="true" draggable="false">';
 }
 
 /**
@@ -139,7 +133,7 @@ export const icon = (name) => {
     file: 'material-icons_insert_drive_file.svg',
     image: 'material-icons_image.svg',
   };
-  return `<img class="svg-icon" src="../assets/${filename[name] || filename.file}" alt="" aria-hidden="true" draggable="false">`;
+  return `<img class="svg-icon" src="./assets/${filename[name] || filename.file}" alt="" aria-hidden="true" draggable="false">`;
 };
 
 /**
