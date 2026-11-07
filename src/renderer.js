@@ -70,6 +70,7 @@ import {
   getSuppressRightContextUntil,
   isDraggingCandidate,
   executeDropAction,
+  getRightDragCandidate,
 } from "./ui/drag-drop-service.js";
 
 import {
@@ -282,7 +283,9 @@ initPanelInteractionService({
   showBackgroundContextMenu,
   updateSummary,
   getRightDragCandidate: () => rightDragCandidate,
-  getSuppressRightContextUntil: () => suppressRightContextUntil,
+  // getSuppressRightContextUntil: () => suppressRightContextUntil,
+  getRightDragCandidate,
+  getSuppressRightContextUntil,
   handleDrop,
   onOpenDirectorySets: (side, event) => {
     directorySetMenuSide = side;

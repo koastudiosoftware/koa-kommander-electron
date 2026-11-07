@@ -241,3 +241,11 @@ export async function executeDropAction(choice) {
       `${choice === "copy" ? "Copied" : "Moved"} ${succeeded} item${succeeded === 1 ? "" : "s"}`,
     );
 }
+
+/**
+ * Retrieves the current right-drag candidate state.
+ * @returns {Object|null}
+ */
+export function getRightDragCandidate() {
+  return rightDragCandidate;
+}
