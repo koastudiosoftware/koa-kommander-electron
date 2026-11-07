@@ -58,7 +58,7 @@ function bookmarkLabel(directory = "") {
  * @param {Object} set
  * @returns {Array<Array<string>>}
  */
-function directorySetDetails(set) {
+export function directorySetDetails(set) {
   if (set.type === "pair")
     return [
       ["Left", set.leftPath],
@@ -129,7 +129,14 @@ export function closeDirectorySetMenu() {
  * @param {*} currentActiveSide
  * @returns
  */
-export function showDirectorySetMenu(side, button, currentActiveSide) {
+export function showDirectorySetMenu(side, target, currentActiveSide) {
+  // Safely resolve the actual <button> element whether passed an Event or a DOM node
+  const el =
+    target instanceof Event ? target.currentTarget || target.target : target;
+  const buttonEl = el?.closest ? el.closest("button") || el : el;
+
+  if (!buttonEl || typeof buttonEl.getBoundingClientRect !== "function") return;
+
   if (!directorySetMenu.hidden && directorySetMenuSide === side) {
     closeDirectorySetMenu();
     return;
@@ -139,7 +146,8 @@ export function showDirectorySetMenu(side, button, currentActiveSide) {
   setActiveSide(side);
   getPanelElement("left").classList.toggle("is-active", side === "left");
   getPanelElement("right").classList.toggle("is-active", side === "right");
-  button.setAttribute("aria-expanded", "true");
+  buttonEl.setAttribute("aria-expanded", "true");
+
   const orderedSets = orderedDirectorySets();
   directorySetMenu.innerHTML = orderedSets.length
     ? orderedSets
@@ -156,19 +164,26 @@ export function showDirectorySetMenu(side, button, currentActiveSide) {
         )
         .join("")
     : '<div class="directory-set-menu-empty">No directory sets saved.</div>';
+
+  // Unhide first so the browser can accurately measure offsetWidth/height
   directorySetMenu.hidden = false;
-  const bounds = button.getBoundingClientRect();
+
+  const bounds = buttonEl.getBoundingClientRect();
   const menuWidth = directorySetMenu.offsetWidth;
   const menuHeight = directorySetMenu.offsetHeight;
+
+  // Align the right edge of the pop-up menu with the right edge of the button
   const left = Math.max(
     8,
     Math.min(bounds.right - menuWidth, innerWidth - menuWidth - 8),
   );
+
   const below = bounds.bottom + 6;
   const top =
     below + menuHeight <= innerHeight - 8
       ? below
       : Math.max(8, bounds.top - menuHeight - 6);
+
   directorySetMenu.style.left = `${left}px`;
   directorySetMenu.style.top = `${top}px`;
 }

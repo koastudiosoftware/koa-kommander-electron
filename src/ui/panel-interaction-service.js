@@ -24,7 +24,8 @@ let panels,
   updateSummary,
   getRightDragCandidate,
   getSuppressRightContextUntil,
-  handleDrop;
+  handleDrop,
+  onOpenDirectorySets;
 
 export function initPanelInteractionService(config) {
   panels = config.panels;
@@ -43,6 +44,7 @@ export function initPanelInteractionService(config) {
   getRightDragCandidate = config.getRightDragCandidate;
   getSuppressRightContextUntil = config.getSuppressRightContextUntil;
   handleDrop = config.handleDrop;
+  onOpenDirectorySets = config.onOpenDirectorySets;
 }
 
 export function getActiveSideRef() {
@@ -153,8 +155,10 @@ export function bindPanel(
   panelEl
     .querySelector('[data-action="directory-sets"]')
     ?.addEventListener("click", (event) => {
-      // Trigger directory set menu handler via custom dispatch or shared callback if needed
-      // (Handled by settings service or kept modular)
+      setActiveSideFn(side);
+      if (onOpenDirectorySets) {
+        onOpenDirectorySets(side, event);
+      }
     });
 
   panelEl.querySelectorAll("[data-view]").forEach((button) =>

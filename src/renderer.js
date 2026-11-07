@@ -16,7 +16,12 @@ import {
   refreshSelection,
 } from "./ui/panel-interaction-service.js";
 
-import { formatSize, setStatus, toast } from "./utils/panel-utils.js";
+import {
+  escapeHtml,
+  formatSize,
+  setStatus,
+  toast,
+} from "./utils/panel-utils.js";
 
 import {
   copySelection,
@@ -46,6 +51,9 @@ import {
   renderSettingsCategory,
   closeDirectorySetMenu,
   openDirectorySet,
+  orderedDirectorySets,
+  directorySetLabel,
+  directorySetDetails,
   renderDirectorySets,
   switchCategory,
 } from "./ui/settings-service.js";
@@ -273,6 +281,62 @@ initPanelInteractionService({
   getRightDragCandidate: () => rightDragCandidate,
   getSuppressRightContextUntil: () => suppressRightContextUntil,
   handleDrop,
+  onOpenDirectorySets: (side, event) => {
+    directorySetMenuSide = side;
+
+    // Preserve your exact rich HTML generation and styling logic
+    if (!preferences.directorySets || preferences.directorySets.length === 0) {
+      directorySetMenu.innerHTML =
+        '<div class="menu-item" style="padding: 8px 12px; color: #666;">No directory sets saved</div>';
+    } else {
+      const orderedSets = orderedDirectorySets();
+      directorySetMenu.innerHTML = orderedSets.length
+        ? orderedSets
+            .map(
+              ({ set, index }) =>
+                `<button role="menuitem" data-menu-directory-set="${index}"><strong>${escapeHtml(directorySetLabel(set))}</strong><span class="directory-set-locations">${directorySetDetails(
+                  set,
+                )
+                  .map(
+                    ([label, directory]) =>
+                      `<span class="directory-set-location-label">${escapeHtml(label)}</span><span class="directory-set-location-path">${escapeHtml(directory || "")}</span>`,
+                  )
+                  .join("")}</span></button>`,
+            )
+            .join("")
+        : '<div class="directory-set-menu-empty">No directory sets saved.</div>';
+    }
+
+    // Safely resolve the actual <button> element in case an inner icon/span was clicked
+    const el =
+      event instanceof Event ? event.currentTarget || event.target : event;
+    const buttonEl = el?.closest ? el.closest("button") || el : el;
+
+    if (!buttonEl || typeof buttonEl.getBoundingClientRect !== "function")
+      return;
+
+    // Unhide first so the browser can accurately measure offsetWidth/height
+    directorySetMenu.hidden = false;
+
+    const bounds = buttonEl.getBoundingClientRect();
+    const menuWidth = directorySetMenu.offsetWidth;
+    const menuHeight = directorySetMenu.offsetHeight;
+
+    // Align the right edge of the pop-up menu with the right edge of the button
+    const left = Math.max(
+      8,
+      Math.min(bounds.right - menuWidth, innerWidth - menuWidth - 8),
+    );
+
+    const below = bounds.bottom + 6;
+    const top =
+      below + menuHeight <= innerHeight - 8
+        ? below
+        : Math.max(8, bounds.top - menuHeight - 6);
+
+    directorySetMenu.style.left = `${left}px`;
+    directorySetMenu.style.top = `${top}px`;
+  },
 });
 
 initLayoutService({
