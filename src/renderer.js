@@ -42,6 +42,8 @@ import {
   finishConflictDecision,
   askForName,
   finishNameDialog,
+  openAbout,
+  closeAbout,
 } from "./ui/dialogs-service.js";
 
 import {
@@ -668,24 +670,6 @@ directorySetMenu.addEventListener("click", async (event) => {
   if (set) await openDirectorySet(set, side);
 });
 
-async function openAbout() {
-  aboutBackdrop.hidden = false;
-  document.querySelector("#about-close").focus();
-  const version = aboutBackdrop.querySelector("#about-version");
-  version.textContent = "Version…";
-  try {
-    const info = await window.fileManager.versionInfo();
-    if (!aboutBackdrop.hidden) version.textContent = `Version ${info.version}`;
-  } catch {
-    if (!aboutBackdrop.hidden) version.textContent = "Version unavailable";
-  }
-}
-
-function closeAbout() {
-  aboutBackdrop.hidden = true;
-  document.querySelector("#about-button").focus();
-}
-
 // ============================================================================
 // 14. CONTEXT MENUS & CLIPBOARD OPERATIONS
 // ============================================================================
@@ -926,7 +910,7 @@ document.addEventListener("click", (event) => {
   if (action === "new-folder") createFolder(activeSide);
   if (action === "back") moveHistory(activeSide, -1);
   if (action === "forward") moveHistory(activeSide, 1);
-  if (action === "about") openAbout();
+  if (action === "about") openAbout(aboutBackdrop);
 });
 
 document.addEventListener("keydown", async (event) => {
@@ -935,7 +919,7 @@ document.addEventListener("keydown", async (event) => {
     return;
   }
   if (!aboutBackdrop.hidden) {
-    if (event.key === "Escape") closeAbout();
+    if (event.key === "Escape") closeAbout(aboutBackdrop);
     return;
   }
   if (!propertiesBackdrop.hidden) {
@@ -1007,10 +991,12 @@ nameDialogBackdrop.addEventListener("click", (event) => {
   if (event.target === nameDialogBackdrop) finishNameDialog(null);
 });
 
-document.querySelector("#about-close").addEventListener("click", closeAbout);
+document
+  .querySelector("#about-close")
+  .addEventListener("click", () => closeAbout(aboutBackdrop));
 
 aboutBackdrop.addEventListener("click", (event) => {
-  if (event.target === aboutBackdrop) closeAbout();
+  if (event.target === aboutBackdrop) closeAbout(aboutBackdrop);
 });
 
 document

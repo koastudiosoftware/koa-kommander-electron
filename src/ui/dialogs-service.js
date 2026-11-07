@@ -22,10 +22,10 @@ let nameDialogBackdrop,
   nameDialogInput,
   resolveNameDialog = null;
 
-  /**
-   * Initializes the dialogs service with the provided configuration.
-   * @param {Object} config
-   */
+/**
+ * Initializes the dialogs service with the provided configuration.
+ * @param {Object} config
+ */
 export function initDialogsService(config) {
   preferences = config.preferences;
   propertiesBackdrop = config.propertiesBackdrop;
@@ -87,7 +87,6 @@ export function makeDialogDraggable(dialogSelector, handleSelector) {
   });
 }
 
-
 // ----------------------------------------------------------------------------
 // 2. PROPERTIES & FOLDER SIZE SCANNING
 // ----------------------------------------------------------------------------
@@ -109,9 +108,9 @@ export function showProperties(properties) {
     ],
     ...(properties.isDirectory
       ? [
-        ["Files", "Counting…"],
-        ["Folders", "Counting…"],
-      ]
+          ["Files", "Counting…"],
+          ["Folders", "Counting…"],
+        ]
       : []),
     ["Created", formatDate(properties.created, preferences())],
     ["Modified", formatDate(properties.modified, preferences())],
@@ -284,7 +283,6 @@ export function finishConflictDecision(decision) {
   resolve(decision);
 }
 
-
 // ----------------------------------------------------------------------------
 // 4. NAME INPUT DIALOG
 // ----------------------------------------------------------------------------
@@ -323,4 +321,26 @@ export function finishNameDialog(value) {
   const resolve = resolveNameDialog;
   resolveNameDialog = null;
   resolve?.(value);
+}
+
+// ----------------------------------------------------------------------------
+// 5. ABOUT DIALOG
+// ----------------------------------------------------------------------------
+
+export async function openAbout(aboutBackdrop) {
+  aboutBackdrop.hidden = false;
+  document.querySelector("#about-close").focus();
+  const version = aboutBackdrop.querySelector("#about-version");
+  version.textContent = "Version…";
+  try {
+    const info = await window.fileManager.versionInfo();
+    if (!aboutBackdrop.hidden) version.textContent = `Version ${info.version}`;
+  } catch {
+    if (!aboutBackdrop.hidden) version.textContent = "Version unavailable";
+  }
+}
+
+export function closeAbout(aboutBackdrop) {
+  aboutBackdrop.hidden = true;
+  document.querySelector("#about-button").focus();
 }
