@@ -4,9 +4,9 @@ import { renderPanel } from "../ui/panel-renderer.js";
 import { initLayoutService, setPanelRatio, getPanelRatio } from "../ui/layout-service.js";
 import {
   loadLayout,
-  saveLayout,
   loadPreferences,
   savePreferences,
+  persistPreferences
 } from "../utils/storage-utils.js";
 
 import {
@@ -320,10 +320,7 @@ function persistLayout() {
   }
 }
 
-function persistPreferences() {
-  savePreferences(preferences);
-  document.documentElement.dataset.theme = preferences.theme;
-}
+
 
 window.addEventListener("storage", (event) => {
   if (event.key !== "koa-settings") return;
@@ -385,7 +382,7 @@ window.addEventListener("storage", (event) => {
   }
 });
 
-persistPreferences();
+persistPreferences(preferences);
 
 
 // ============================================================================
@@ -1042,7 +1039,7 @@ settingsContent.addEventListener("change", (event) => {
   if (!control) return;
   preferences[control.dataset.preference] =
     control.type === "checkbox" ? control.checked : control.value;
-  persistPreferences();
+  persistPreferences(preferences);
   if (control.dataset.preference === "directorySetSort") renderDirectorySets();
   if (
     control.dataset.preference === "showHidden" ||
@@ -1123,7 +1120,7 @@ settingsContent.addEventListener("drop", (event) => {
   const [set] = preferences.directorySets.splice(sourceIndex, 1);
   if (sourceIndex < insertIndex) insertIndex -= 1;
   preferences.directorySets.splice(insertIndex, 0, set);
-  persistPreferences();
+  persistPreferences(preferences);
   renderDirectorySets();
 });
 
@@ -1143,7 +1140,7 @@ settingsContent.addEventListener("click", async (event) => {
       );
       if (directory) {
         preferences.thumbnailCachePath = directory;
-        persistPreferences();
+        persistPreferences(preferences);
         renderSettingsCategory();
       }
     } catch (error) {
@@ -1153,7 +1150,7 @@ settingsContent.addEventListener("click", async (event) => {
   }
   if (event.target.closest("[data-cache-default]")) {
     preferences.thumbnailCachePath = "";
-    persistPreferences();
+    persistPreferences(preferences);
     renderSettingsCategory();
     return;
   }
@@ -1162,7 +1159,7 @@ settingsContent.addEventListener("click", async (event) => {
     const input = settingsContent.querySelector("#thumbnail-cache-path");
     const status = settingsContent.querySelector("#thumbnail-cache-status");
     preferences.thumbnailCachePath = input.value.trim();
-    persistPreferences();
+    persistPreferences(preferences);
     button.disabled = true;
     status.textContent = "Clearing cached thumbnails…";
     try {
@@ -1238,7 +1235,7 @@ settingsContent.addEventListener("click", async (event) => {
           };
     if (draft.index === null) preferences.directorySets.push(record);
     else preferences.directorySets[draft.index] = record;
-    persistPreferences();
+    persistPreferences(preferences);
     directorySetDraft = null;
     renderDirectorySets();
     return;
@@ -1246,7 +1243,7 @@ settingsContent.addEventListener("click", async (event) => {
   const remove = event.target.closest("[data-remove-set]");
   if (remove) {
     preferences.directorySets.splice(Number(remove.dataset.removeSet), 1);
-    persistPreferences();
+    persistPreferences(preferences);
     renderDirectorySets();
     return;
   }

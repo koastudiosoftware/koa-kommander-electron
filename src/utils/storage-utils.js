@@ -54,3 +54,12 @@ export function savePreferences(preferences) {
     /* Keep usable when storage is unavailable */
   }
 }
+
+/**
+ * Persists the preferences and applies the theme.
+ * @param {Object} preferences
+ */
+export function persistPreferences(preferences) {
+  savePreferences(preferences);
+  document.documentElement.dataset.theme = preferences.theme;
+}
