@@ -492,7 +492,7 @@ conflictRenameInput.addEventListener("keydown", (event) => {
 async function navigate(
   side,
   directory,
-  { historyMode = "push", historyIndex = -1 } = {},
+  { historyMode = "push", historyIndex = -1, suppressToast = false } = {},
 ) {
   const panel = panels[side];
   panel.thumbnailGeneration += 1;
@@ -542,8 +542,12 @@ async function navigate(
   } catch (error) {
     if (panel.view === "icons")
       loadThumbnailImages(side, panel.thumbnailGeneration);
-    toast(`Could not open folder: ${error.message}`);
-    setStatus("Could not load folder");
+
+    if (!suppressToast) {
+      toast(`Could not open folder: ${error.message}`);
+      setStatus("Could not load folder");
+    }
+
     return false;
   }
 }

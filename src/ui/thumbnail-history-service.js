@@ -213,9 +213,15 @@ export function moveHistory(side, offset) {
  * Moves the history index to a specific position.
  * @param {string} side - The side of the panel to move history for.
  * @param {number} targetIndex - The index to move the history to.
- * @returns {void}
+ * @returns {Promise<void>}
  */
-export function moveHistoryTo(side, targetIndex) {
+/**
+ * Moves the history index to a specific position.
+ * @param {string} side - The side of the panel to move history for.
+ * @param {number} targetIndex - The index to move the history to.
+ * @returns {Promise<void>}
+ */
+export async function moveHistoryTo(side, targetIndex) {
   const panel = panels[side];
   if (
     targetIndex < 0 ||
@@ -223,10 +229,39 @@ export function moveHistoryTo(side, targetIndex) {
     targetIndex === panel.historyIndex
   )
     return;
-  navigate(side, panel.history[targetIndex], {
-    historyMode: "move",
-    historyIndex: targetIndex,
-  });
+
+  const isMovingBack = targetIndex < panel.historyIndex;
+  const currentPath = panel.path;
+
+  while (targetIndex >= 0 && targetIndex < panel.history.length) {
+    const candidatePath = panel.history[targetIndex];
+
+    // Ignore this entry if we're moving back and it's the exact same as our current directory
+    if (isMovingBack && candidatePath === currentPath && targetIndex > 0) {
+      targetIndex -= 1;
+      continue;
+    }
+
+    const suppressToast = isMovingBack && targetIndex < panel.historyIndex;
+
+    const success = await navigate(side, candidatePath, {
+      historyMode: "move",
+      historyIndex: targetIndex,
+      suppressToast,
+    });
+
+    if (success) {
+      return;
+    }
+
+    // If navigation failed (e.g., directory deleted) and we were moving backward, step back further
+    if (isMovingBack && targetIndex > 0) {
+      targetIndex -= 1;
+    } else {
+      toast("Could not open folder: Directory no longer exists");
+      break;
+    }
+  }
 }
 
 /**
