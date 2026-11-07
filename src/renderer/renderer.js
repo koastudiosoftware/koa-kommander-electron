@@ -2,6 +2,12 @@ import { PanelModel } from "../models/PanelModel.js";
 import { initSearchService } from "../ui/search-service.js";
 import { renderPanel } from "../ui/panel-renderer.js";
 import { initLayoutService, setPanelRatio, getPanelRatio } from "../ui/layout-service.js";
+import {
+  loadLayout,
+  saveLayout,
+  loadPreferences,
+  savePreferences,
+} from "../utils/storage-utils.js";
 
 import {
   initPanelInteractionService,
@@ -78,12 +84,8 @@ import {
 // 1. STATE INITIALIZATION & LAYOUT RESTORATION
 // ============================================================================
 
-let savedLayout = {};
-try {
-  savedLayout = JSON.parse(localStorage.getItem("koa-layout") || "{}") || {};
-} catch {
-  savedLayout = {};
-}
+let savedLayout = loadLayout({});
+
 let activeSide = "left";
 const currentActiveSide = () => activeSide;
 const panels = {
@@ -109,15 +111,8 @@ const defaultPreferences = {
   directorySetSort: "manual",
   thumbnailCachePath: "",
 };
-
 let preferences;
-let savedPreferences = {};
-
-try {
-  savedPreferences = JSON.parse(localStorage.getItem("koa-settings") || "{}");
-} catch {
-  savedPreferences = {};
-}
+let savedPreferences = loadPreferences({});
 
 preferences = { ...defaultPreferences, ...savedPreferences };
 
@@ -325,8 +320,8 @@ function persistLayout() {
   }
 }
 
-function savePreferences() {
-  localStorage.setItem("koa-settings", JSON.stringify(preferences));
+function persistPreferences() {
+  savePreferences(preferences);
   document.documentElement.dataset.theme = preferences.theme;
 }
 
@@ -390,7 +385,7 @@ window.addEventListener("storage", (event) => {
   }
 });
 
-savePreferences();
+persistPreferences();
 
 
 // ============================================================================
@@ -1047,7 +1042,7 @@ settingsContent.addEventListener("change", (event) => {
   if (!control) return;
   preferences[control.dataset.preference] =
     control.type === "checkbox" ? control.checked : control.value;
-  savePreferences();
+  persistPreferences();
   if (control.dataset.preference === "directorySetSort") renderDirectorySets();
   if (
     control.dataset.preference === "showHidden" ||
@@ -1128,7 +1123,7 @@ settingsContent.addEventListener("drop", (event) => {
   const [set] = preferences.directorySets.splice(sourceIndex, 1);
   if (sourceIndex < insertIndex) insertIndex -= 1;
   preferences.directorySets.splice(insertIndex, 0, set);
-  savePreferences();
+  persistPreferences();
   renderDirectorySets();
 });
 
@@ -1148,7 +1143,7 @@ settingsContent.addEventListener("click", async (event) => {
       );
       if (directory) {
         preferences.thumbnailCachePath = directory;
-        savePreferences();
+        persistPreferences();
         renderSettingsCategory();
       }
     } catch (error) {
@@ -1158,7 +1153,7 @@ settingsContent.addEventListener("click", async (event) => {
   }
   if (event.target.closest("[data-cache-default]")) {
     preferences.thumbnailCachePath = "";
-    savePreferences();
+    persistPreferences();
     renderSettingsCategory();
     return;
   }
@@ -1167,7 +1162,7 @@ settingsContent.addEventListener("click", async (event) => {
     const input = settingsContent.querySelector("#thumbnail-cache-path");
     const status = settingsContent.querySelector("#thumbnail-cache-status");
     preferences.thumbnailCachePath = input.value.trim();
-    savePreferences();
+    persistPreferences();
     button.disabled = true;
     status.textContent = "Clearing cached thumbnails…";
     try {
@@ -1243,7 +1238,7 @@ settingsContent.addEventListener("click", async (event) => {
           };
     if (draft.index === null) preferences.directorySets.push(record);
     else preferences.directorySets[draft.index] = record;
-    savePreferences();
+    persistPreferences();
     directorySetDraft = null;
     renderDirectorySets();
     return;
@@ -1251,7 +1246,7 @@ settingsContent.addEventListener("click", async (event) => {
   const remove = event.target.closest("[data-remove-set]");
   if (remove) {
     preferences.directorySets.splice(Number(remove.dataset.removeSet), 1);
-    savePreferences();
+    persistPreferences();
     renderDirectorySets();
     return;
   }
