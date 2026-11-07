@@ -2,6 +2,7 @@ import { PanelModel } from "./models/PanelModel.js";
 import { initSearchService } from "./ui/search-service.js";
 import { renderPanel } from "./ui/panel-renderer.js";
 import { initLayoutService, setPanelRatio } from "./ui/layout-service.js";
+import { createFolder } from "./ui/panel-interaction-service.js";
 
 import {
   loadLayout,
