@@ -1,7 +1,7 @@
 {
   "name": "koa-kommander-electron",
   "productName": "Koa Kommander",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A focused dual-panel file manager for Windows",
   "main": "src/main.js",
   "private": true,
