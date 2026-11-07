@@ -388,7 +388,7 @@ kbd {
   background: #f7f9f8;
 }
 .file-list tbody tr.selected {
-  background: #eaf3ee;
+  background: #e8f0f8;
 }
 .file-list tbody tr.drop-target {
   outline: 2px solid #67a487;
@@ -513,8 +513,8 @@ kbd {
   background: #f7f9f8;
 }
 .icon-tile.selected {
-  background: #eaf3ee;
-  border-color: #d9e9df;
+  background: #e8f0f8;
+  border-color: #d0e2f3;
 }
 .icon-tile.drop-target {
   outline: 2px solid #67a487;
@@ -1539,9 +1539,9 @@ kbd {
   box-shadow: inset 0 0 0 2px #6ea487;
 }
 .panel [data-entry].right-drop-target {
-  outline: 2px solid #67a487;
+  outline: 2px solid #7da6cc;
   outline-offset: -2px;
-  background: #eaf3ee;
+  background: #e8f0f8;
 }
 .right-dragging {
   user-select: none;

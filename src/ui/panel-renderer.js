@@ -23,10 +23,8 @@ import { applyThumbnailSize, loadThumbnailImages } from "../ui/thumbnail-history
  * @returns {string} - The HTML string for the rendered drive buttons.
  */
 export function renderDriveButtons(detectedDrives, side, panels) {
-  console.log(`Rendering drive buttons for side: ${side}, path: ${panels[side].path}`);
   return detectedDrives
     .map((drive) => {
-      console.log(`Rendering drive button for drive: ${drive.name}, path: ${drive.path}`);
       const isCurrent = panels[side].path
         ?.toLowerCase()
         .startsWith(drive.path.toLowerCase());
@@ -56,7 +54,6 @@ export function renderPanel(
   { loadThumbnails = true } = {},
 ) {
   const panel = panels[side];
-  console.log(`Rendering panel for side: ${side}, path: ${panel.path}, view: ${panel.view}`);
   const panelEl = getPanelElement(side);
   const thumbnailGeneration = ++panel.thumbnailGeneration;
 
@@ -83,7 +80,6 @@ export function renderPanel(
  */
 function renderEntries(side, panels, preferences) {
   const panel = panels[side];
-  console.log(`Rendering entries for side: ${side}, path: ${panel.path}, view: ${panel.view}`);
   if (panel.view === "details") {
     const visibleEntries = panel.entries.filter(
       (entry) => preferences.showHidden || !entry.name.startsWith("."),
@@ -151,7 +147,6 @@ function renderEntries(side, panels, preferences) {
  */
 function panelChrome(side, panels, detectedDrives) {
   const panel = panels[side];
-  console.log(`Rendering panel chrome for side: ${side}, path: ${panel.path}, view: ${panel.view}`);
   const parts = panel.path ? pathParts(panel.path) : [];
   const crumbs = parts
     .map((part, index) => {
@@ -187,7 +182,6 @@ function panelChrome(side, panels, detectedDrives) {
  * @returns {string} HTML string representing the panel status, including selected count and total size of selected files.
  */
 export function panelStatus(panel) {
-  console.log(`Rendering panel status for path: ${panel.path}, selected count: ${panel.selected.size}`);
   const selectedCount = panel.selected.size;
   const selectedFiles = panel.entries.filter(
     (entry) => panel.selected.has(entry.path) && !entry.isDirectory,
