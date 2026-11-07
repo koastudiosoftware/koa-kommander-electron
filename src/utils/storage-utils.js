@@ -1,3 +1,5 @@
+import { getPanelRatio } from "../ui/layout-service.js";
+
 const LAYOUT_KEY = "koa-layout";
 const SETTINGS_KEY = "koa-settings";
 
@@ -12,6 +14,36 @@ export function loadLayout(defaultLayout = {}) {
     return data && typeof data === "object" ? data : defaultLayout;
   } catch {
     return defaultLayout;
+  }
+}
+
+/**
+ * Persists the current layout to local storage.
+ * @returns {void}
+ */
+export function persistLayout(panels, layoutInitialized) {
+  if (!layoutInitialized) return;
+  try {
+    localStorage.setItem(
+      "koa-layout",
+      JSON.stringify({
+        panelRatio: getPanelRatio(),
+        left: {
+          path: panels.left.path,
+          columns: panels.left.columns,
+          view: panels.left.view,
+          iconSize: panels.left.iconSize,
+        },
+        right: {
+          path: panels.right.path,
+          columns: panels.right.columns,
+          view: panels.right.view,
+          iconSize: panels.right.iconSize,
+        },
+      }),
+    );
+  } catch {
+    /* Keep the file manager usable when storage is unavailable. */
   }
 }
 

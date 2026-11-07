@@ -1,11 +1,15 @@
 import { PanelModel } from "../models/PanelModel.js";
 import { initSearchService } from "../ui/search-service.js";
 import { renderPanel } from "../ui/panel-renderer.js";
-import { initLayoutService, setPanelRatio, getPanelRatio } from "../ui/layout-service.js";
+import {
+  initLayoutService,
+  setPanelRatio,
+} from "../ui/layout-service.js";
+
 import {
   loadLayout,
   loadPreferences,
-  savePreferences,
+  persistLayout,
   persistPreferences
 } from "../utils/storage-utils.js";
 
@@ -87,7 +91,7 @@ import {
 let savedLayout = loadLayout({});
 
 let activeSide = "left";
-const currentActiveSide = () => activeSide;
+// const currentActiveSide = () => activeSide;
 const panels = {
   left: new PanelModel("left", savedLayout.left),
   right: new PanelModel("right", savedLayout.right),
@@ -170,7 +174,6 @@ let rightDragCandidate = null;
 const workspaceElement = document.querySelector(".workspace");
 const splitterElement = document.querySelector(".splitter");
 
-
 initDrivesService({
   panels,
   navigate,
@@ -211,7 +214,6 @@ initClipboardService({
   askForName,
 });
 
-// must come after settingsBackdrop is defined
 initSettingsService({
   preferences: () => preferences,
   panels,
@@ -220,7 +222,7 @@ initSettingsService({
     activeSide = side;
   },
   navigate,
-  savePreferences,
+  savePreferences: preferences,
   renderPanel,
   currentActiveSide: () => activeSide, // Pass as getter
   detectedDrives: () => detectedDrives,
@@ -286,7 +288,7 @@ initLayoutService({
   workspaceElement,
   splitterElement,
   savedPanelRatio: savedLayout.panelRatio,
-  persistLayout,
+  persistLayout: () => persistLayout(panels, layoutInitialized),
 });
 
 
@@ -294,31 +296,7 @@ initLayoutService({
 // 4. STORAGE PERSISTENCE & THEME SYNC
 // ============================================================================
 
-function persistLayout() {
-  if (!layoutInitialized) return;
-  try {
-    localStorage.setItem(
-      "koa-layout",
-      JSON.stringify({
-        panelRatio: getPanelRatio(),
-        left: {
-          path: panels.left.path,
-          columns: panels.left.columns,
-          view: panels.left.view,
-          iconSize: panels.left.iconSize,
-        },
-        right: {
-          path: panels.right.path,
-          columns: panels.right.columns,
-          view: panels.right.view,
-          iconSize: panels.right.iconSize,
-        },
-      }),
-    );
-  } catch {
-    /* Keep the file manager usable when storage is unavailable. */
-  }
-}
+
 
 
 
@@ -513,7 +491,7 @@ async function navigate(
     panel.selected.clear();
     renderPanel(side, panels, activeSide, detectedDrives, preferences);
     bindPanel(side, () => activeSide, (s) => { activeSide = s; }, applyThumbnailSize);
-    persistLayout();
+    persistLayout(panels, layoutInitialized);
     setStatus("Ready");
     return true;
   } catch (error) {
@@ -1287,7 +1265,7 @@ async function initialize() {
     rightExists = await window.fileManager.list(docs).catch(() => null);
   await navigate("right", rightExists?.path || start);
   layoutInitialized = true;
-  persistLayout();
+  persistLayout(panels, layoutInitialized);
 }
 
 initialize();
@@ -1338,4 +1316,4 @@ let panelRatio = Number.isFinite(savedLayout.panelRatio)
 
 setPanelRatio(panelRatio);
 
-window.addEventListener("beforeunload", persistLayout);
+window.addEventListener("beforeunload", () => persistLayout(panels, layoutInitialized));
