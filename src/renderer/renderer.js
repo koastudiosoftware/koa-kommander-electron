@@ -1,13 +1,15 @@
 import { PanelModel } from "../models/PanelModel.js";
 import { initSearchService } from "../ui/search-service.js";
-import { panelStatus, renderPanel } from "../ui/panel-renderer.js";
-import { initPanelInteractionService, bindPanel } from "../ui/panel-interaction-service.js";
+import { renderPanel } from "../ui/panel-renderer.js";
 
 import {
-  escapeHtml,
-  getPanelElement,
+  initPanelInteractionService,
+  bindPanel,
+  refreshSelection,
+} from "../ui/panel-interaction-service.js";
+
+import {
   formatSize,
-  pathParts,
   setStatus,
   toast,
 } from "../utils/panel-utils.js";
@@ -38,7 +40,6 @@ import {
   openSettings,
   closeSettings,
   renderSettingsCategory,
-  showDirectorySetMenu,
   closeDirectorySetMenu,
   openDirectorySet,
   renderDirectorySets,
@@ -56,24 +57,26 @@ import {
 } from "../ui/drag-drop-service.js";
 
 import {
+  bindDriveButtons,
   initDrivesService,
   refreshDetectedDrives,
   refreshDriveButtonGroups,
-  bindDriveButtons,
 } from "../ui/drives-service.js";
 
 import {
-  initThumbnailHistoryService,
   applyThumbnailSize,
+  initThumbnailHistoryService,
   loadThumbnailImages,
   updateSummary,
   moveHistory,
   bindHistoryLongPress,
 } from "../ui/thumbnail-history-service.js";
 
+
 // ============================================================================
 // 1. STATE INITIALIZATION & LAYOUT RESTORATION
 // ============================================================================
+
 let savedLayout = {};
 try {
   savedLayout = JSON.parse(localStorage.getItem("koa-layout") || "{}") || {};
@@ -167,7 +170,6 @@ let defaultThumbnailCachePath = "";
 let directorySetDraft = null;
 let activeFolderSizeRequest = null;
 let rightDragCandidate = null;
-let suppressRightContextUntil = 0;
 
 initDrivesService({
   panels,
@@ -262,18 +264,21 @@ initSearchService({
 
 initPanelInteractionService({
   panels,
+  currentActiveSide: () => activeSide,
+  detectedDrives: () => detectedDrives,
   preferences: () => preferences,
-  getActiveSide: () => activeSide,
-  setActiveSide: (side) => {
-    activeSide = side;
-  },
   navigate,
-  renderPanel: (side) =>
-    renderPanel(side, panels, activeSide, detectedDrives, preferences), // Use activeSide directly
-  bindPanel,
+  renderPanel: (side, opts) =>
+    renderPanel(side, panels, activeSide, detectedDrives, preferences, opts),
+  bindDriveButtons,
   getSelected,
+  transferWithConflicts,
+  askForName,
   showContextMenu,
   showBackgroundContextMenu,
+  updateSummary,
+  getRightDragCandidate: () => rightDragCandidate,
+  getSuppressRightContextUntil: () => suppressRightContextUntil,
   handleDrop,
 });
 
@@ -343,7 +348,14 @@ window.addEventListener("storage", (event) => {
         detectedDrives,
         preferences,
       );
-      bindPanel("left");
+      bindPanel(
+        "left",
+        () => activeSide,
+        (s) => {
+          activeSide = s;
+        },
+        applyThumbnailSize,
+      );
       renderPanel(
         "right",
         panels,
@@ -351,7 +363,14 @@ window.addEventListener("storage", (event) => {
         detectedDrives,
         preferences,
       );
-      bindPanel("right");
+      bindPanel(
+        "right",
+        () => activeSide,
+        (s) => {
+          activeSide = s;
+        },
+        applyThumbnailSize,
+      );
     }
     if (!settingsBackdrop.hidden && !directorySetDraft)
       renderSettingsCategory();
@@ -490,7 +509,7 @@ async function navigate(
     }
     panel.selected.clear();
     renderPanel(side, panels, activeSide, detectedDrives, preferences);
-    bindPanel(side);
+    bindPanel(side, () => activeSide, (s) => { activeSide = s; }, applyThumbnailSize);
     persistLayout();
     setStatus("Ready");
     return true;
@@ -594,7 +613,7 @@ window.fileManager.onDirectoryChanged(({ side, directory }) => {
           panel.selected.delete(selectedPath);
       }
       renderPanel(side, panels, activeSide, detectedDrives, preferences);
-      bindPanel(side);
+      bindPanel(side, () => activeSide, (s) => { activeSide = s; }, applyThumbnailSize);
     })
     .catch(() => {});
 });
