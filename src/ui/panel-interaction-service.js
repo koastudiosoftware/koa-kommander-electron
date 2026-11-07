@@ -192,6 +192,9 @@ export function bindPanel(
 
   panelEl.querySelectorAll("[data-sort]").forEach((heading) =>
     heading.addEventListener("click", () => {
+      setActiveSideFn(side);
+      refreshSelection(getActiveSideFn());
+
       const column = heading.dataset.sort;
       if (panel.sortBy === column)
         panel.sortDirection = panel.sortDirection === "asc" ? "desc" : "asc";
@@ -200,6 +203,7 @@ export function bindPanel(
         panel.sortDirection = "asc";
       }
       renderPanel(side);
+      bindPanel(side, getActiveSideFn, setActiveSideFn, applyThumbnailSize);
     }),
   );
 
