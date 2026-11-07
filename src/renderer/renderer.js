@@ -1,16 +1,13 @@
 import { PanelModel } from "../models/PanelModel.js";
 import { initSearchService } from "../ui/search-service.js";
 import { renderPanel } from "../ui/panel-renderer.js";
-import {
-  initLayoutService,
-  setPanelRatio,
-} from "../ui/layout-service.js";
+import { initLayoutService, setPanelRatio } from "../ui/layout-service.js";
 
 import {
   loadLayout,
   loadPreferences,
   persistLayout,
-  persistPreferences
+  persistPreferences,
 } from "../utils/storage-utils.js";
 
 import {
@@ -19,11 +16,7 @@ import {
   refreshSelection,
 } from "../ui/panel-interaction-service.js";
 
-import {
-  formatSize,
-  setStatus,
-  toast,
-} from "../utils/panel-utils.js";
+import { formatSize, setStatus, toast } from "../utils/panel-utils.js";
 
 import {
   copySelection,
@@ -58,6 +51,7 @@ import {
 } from "../ui/settings-service.js";
 
 import {
+  clearRightDropTargets,
   initDragDropService,
   handlePointerDown,
   handlePointerMove,
@@ -83,7 +77,6 @@ import {
   bindHistoryLongPress,
 } from "../ui/thumbnail-history-service.js";
 
-
 // ============================================================================
 // 1. STATE INITIALIZATION & LAYOUT RESTORATION
 // ============================================================================
@@ -98,7 +91,6 @@ const panels = {
 };
 let layoutInitialized = false;
 let clipboard = null;
-
 
 // ============================================================================
 // 2. PREFERENCES & CONFIGURATION STATE
@@ -137,7 +129,6 @@ if (!Array.isArray(savedPreferences.directorySets))
   );
 
 delete preferences.bookmarks;
-
 
 // ============================================================================
 // 3. UI ELEMENT REFERENCES & GLOBAL MODAL STATE
@@ -291,14 +282,9 @@ initLayoutService({
   persistLayout: () => persistLayout(panels, layoutInitialized),
 });
 
-
 // ============================================================================
 // 4. STORAGE PERSISTENCE & THEME SYNC
 // ============================================================================
-
-
-
-
 
 window.addEventListener("storage", (event) => {
   if (event.key !== "koa-settings") return;
@@ -322,13 +308,7 @@ window.addEventListener("storage", (event) => {
     delete preferences.bookmarks;
     document.documentElement.dataset.theme = preferences.theme;
     if (layoutInitialized) {
-      renderPanel(
-        "left",
-        panels,
-        activeSide,
-        detectedDrives,
-        preferences,
-      );
+      renderPanel("left", panels, activeSide, detectedDrives, preferences);
       bindPanel(
         "left",
         () => activeSide,
@@ -337,13 +317,7 @@ window.addEventListener("storage", (event) => {
         },
         applyThumbnailSize,
       );
-      renderPanel(
-        "right",
-        panels,
-        activeSide,
-        detectedDrives,
-        preferences,
-      );
+      renderPanel("right", panels, activeSide, detectedDrives, preferences);
       bindPanel(
         "right",
         () => activeSide,
@@ -361,7 +335,6 @@ window.addEventListener("storage", (event) => {
 });
 
 persistPreferences(preferences);
-
 
 // ============================================================================
 // 6, 7, 8. DIALOGS, PROPERTIES & CONFLICT RESOLUTION
@@ -446,7 +419,6 @@ conflictRenameInput.addEventListener("keydown", (event) => {
   }
 });
 
-
 // ============================================================================
 // 9. NAVIGATION & PANEL CORE LOGIC
 // ============================================================================
@@ -490,7 +462,14 @@ async function navigate(
     }
     panel.selected.clear();
     renderPanel(side, panels, activeSide, detectedDrives, preferences);
-    bindPanel(side, () => activeSide, (s) => { activeSide = s; }, applyThumbnailSize);
+    bindPanel(
+      side,
+      () => activeSide,
+      (s) => {
+        activeSide = s;
+      },
+      applyThumbnailSize,
+    );
     persistLayout(panels, layoutInitialized);
     setStatus("Ready");
     return true;
@@ -573,7 +552,6 @@ window.fileManager.onRestoreDirectoryWatch(({ side, directory }) => {
     });
 });
 
-
 // ============================================================================
 // 11. THUMBNAILS, STATUS & HISTORY
 // ============================================================================
@@ -594,7 +572,14 @@ window.fileManager.onDirectoryChanged(({ side, directory }) => {
           panel.selected.delete(selectedPath);
       }
       renderPanel(side, panels, activeSide, detectedDrives, preferences);
-      bindPanel(side, () => activeSide, (s) => { activeSide = s; }, applyThumbnailSize);
+      bindPanel(
+        side,
+        () => activeSide,
+        (s) => {
+          activeSide = s;
+        },
+        applyThumbnailSize,
+      );
     })
     .catch(() => {});
 });
@@ -605,7 +590,6 @@ document.addEventListener("auxclick", (event) => {
   event.stopPropagation();
   moveHistory(activeSide, event.button === 3 ? -1 : 1);
 });
-
 
 // ============================================================================
 // 12. DIRECTORY SETS, BOOKMARKS & SETTINGS MODAL
@@ -637,7 +621,6 @@ function closeAbout() {
   aboutBackdrop.hidden = true;
   document.querySelector("#about-button").focus();
 }
-
 
 // ============================================================================
 // 14. CONTEXT MENUS & CLIPBOARD OPERATIONS
@@ -814,18 +797,9 @@ async function handleDrop(event, destinationSide, destination) {
     );
 }
 
-
 // ============================================================================
 // 15. DRAG & DROP BETWEEN PANELS
 // ============================================================================
-
-function clearRightDropTargets() {
-  document
-    .querySelectorAll(
-      ".panel.right-drop-target,.panel [data-entry].right-drop-target",
-    )
-    .forEach((element) => element.classList.remove("right-drop-target"));
-}
 
 document.addEventListener("pointerdown", (event) => {
   handlePointerDown(event, panels, getSelected);
@@ -864,7 +838,6 @@ document.addEventListener("mousedown", (event) => {
     return;
   closeDirectorySetMenu();
 });
-
 
 // ============================================================================
 // 16. GLOBAL EVENT LISTENERS & KEYBOARD SHORTCUTS
@@ -945,7 +918,6 @@ document.addEventListener("keydown", async (event) => {
   }
 });
 
-
 // ============================================================================
 // 17. SETTINGS & DIALOG BINDINGS
 // ============================================================================
@@ -1024,26 +996,14 @@ settingsContent.addEventListener("change", (event) => {
     control.dataset.preference === "groupFolders"
   ) {
     renderPanel("left", panels, activeSide, detectedDrives, preferences);
-    renderPanel(
-      "right",
-      panels,
-      activeSide,
-      detectedDrives,
-      preferences,
-    );
+    renderPanel("right", panels, activeSide, detectedDrives, preferences);
   }
   if (
     control.dataset.preference === "dateFormat" ||
     control.dataset.preference === "timeFormat"
   ) {
     renderPanel("left", panels, activeSide, detectedDrives, preferences);
-    renderPanel(
-      "right",
-      panels,
-      activeSide,
-      detectedDrives,
-      preferences,
-    );
+    renderPanel("right", panels, activeSide, detectedDrives, preferences);
   }
 });
 
@@ -1243,7 +1203,6 @@ settingsContent.addEventListener("click", async (event) => {
   }
 });
 
-
 // ============================================================================
 // 18. APP INITIALIZATION & SPLITTER RESIZING
 // ============================================================================
@@ -1316,4 +1275,6 @@ let panelRatio = Number.isFinite(savedLayout.panelRatio)
 
 setPanelRatio(panelRatio);
 
-window.addEventListener("beforeunload", () => persistLayout(panels, layoutInitialized));
+window.addEventListener("beforeunload", () =>
+  persistLayout(panels, layoutInitialized),
+);

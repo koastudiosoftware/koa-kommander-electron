@@ -7,6 +7,17 @@ let pendingRightDrop = null;
 let suppressRightContextUntil = 0;
 
 /**
+ * Clears all right drop targets.
+ */
+export function clearRightDropTargets() {
+  document
+    .querySelectorAll(
+      ".panel.right-drop-target,.panel [data-entry].right-drop-target",
+    )
+    .forEach((element) => element.classList.remove("right-drop-target"));
+}
+
+/**
  *
  * @param {*} config
  */
@@ -25,17 +36,6 @@ export function initDragDropService(config) {
       pendingRightDrop = null;
     }
   });
-}
-
-/**
- * Clears all right drop targets.
- */
-export function clearRightDropTargets() {
-  document
-    .querySelectorAll(
-      ".panel.right-drop-target,.panel [data-entry].right-drop-target",
-    )
-    .forEach((element) => element.classList.remove("right-drop-target"));
 }
 
 /**
