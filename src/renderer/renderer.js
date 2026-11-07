@@ -1,6 +1,7 @@
 import { PanelModel } from "../models/PanelModel.js";
 import { initSearchService } from "../ui/search-service.js";
 import { renderPanel } from "../ui/panel-renderer.js";
+import { initLayoutService, setPanelRatio, getPanelRatio } from "../ui/layout-service.js";
 
 import {
   initPanelInteractionService,
@@ -171,6 +172,10 @@ let directorySetDraft = null;
 let activeFolderSizeRequest = null;
 let rightDragCandidate = null;
 
+const workspaceElement = document.querySelector(".workspace");
+const splitterElement = document.querySelector(".splitter");
+
+
 initDrivesService({
   panels,
   navigate,
@@ -282,6 +287,13 @@ initPanelInteractionService({
   handleDrop,
 });
 
+initLayoutService({
+  workspaceElement,
+  splitterElement,
+  savedPanelRatio: savedLayout.panelRatio,
+  persistLayout,
+});
+
 
 // ============================================================================
 // 4. STORAGE PERSISTENCE & THEME SYNC
@@ -293,7 +305,7 @@ function persistLayout() {
     localStorage.setItem(
       "koa-layout",
       JSON.stringify({
-        panelRatio,
+        panelRatio: getPanelRatio(),
         left: {
           path: panels.left.path,
           columns: panels.left.columns,
@@ -312,7 +324,6 @@ function persistLayout() {
     /* Keep the file manager usable when storage is unavailable. */
   }
 }
-
 
 function savePreferences() {
   localStorage.setItem("koa-settings", JSON.stringify(preferences));
@@ -625,6 +636,7 @@ document.addEventListener("auxclick", (event) => {
   moveHistory(activeSide, event.button === 3 ? -1 : 1);
 });
 
+
 // ============================================================================
 // 12. DIRECTORY SETS, BOOKMARKS & SETTINGS MODAL
 // ============================================================================
@@ -660,6 +672,7 @@ function closeAbout() {
 // ============================================================================
 // 14. CONTEXT MENUS & CLIPBOARD OPERATIONS
 // ============================================================================
+
 function showContextMenu(x, y, side, entry) {
   const openAction = [
     "Open",
@@ -831,9 +844,11 @@ async function handleDrop(event, destinationSide, destination) {
     );
 }
 
+
 // ============================================================================
 // 15. DRAG & DROP BETWEEN PANELS
 // ============================================================================
+
 function clearRightDropTargets() {
   document
     .querySelectorAll(
@@ -879,6 +894,7 @@ document.addEventListener("mousedown", (event) => {
     return;
   closeDirectorySetMenu();
 });
+
 
 // ============================================================================
 // 16. GLOBAL EVENT LISTENERS & KEYBOARD SHORTCUTS
@@ -959,9 +975,11 @@ document.addEventListener("keydown", async (event) => {
   }
 });
 
+
 // ============================================================================
 // 17. SETTINGS & DIALOG BINDINGS
 // ============================================================================
+
 document
   .querySelector("#settings-button")
   .addEventListener("click", () => openSettings(settingsBackdrop));
@@ -1255,9 +1273,11 @@ settingsContent.addEventListener("click", async (event) => {
   }
 });
 
+
 // ============================================================================
 // 18. APP INITIALIZATION & SPLITTER RESIZING
 // ============================================================================
+
 async function initialize() {
   const home = await window.fileManager.list(undefined).catch(() => null);
   refreshDetectedDrives();
@@ -1320,68 +1340,10 @@ document.querySelectorAll(".menu-group").forEach((group) => {
   });
 });
 
-const workspaceElement = document.querySelector(".workspace");
-const splitterElement = document.querySelector(".splitter");
 let panelRatio = Number.isFinite(savedLayout.panelRatio)
   ? savedLayout.panelRatio
   : 0.5;
 
-function setPanelRatio(ratio) {
-  const availableWidth = Math.max(
-    1,
-    workspaceElement.clientWidth - splitterElement.offsetWidth,
-  );
-  const minimumRatio = Math.min(0.5, 240 / availableWidth);
-  panelRatio = Math.max(minimumRatio, Math.min(1 - minimumRatio, ratio));
-  workspaceElement.style.setProperty("--left-panel", `${panelRatio}fr`);
-  workspaceElement.style.setProperty("--right-panel", `${1 - panelRatio}fr`);
-  splitterElement.setAttribute(
-    "aria-valuenow",
-    String(Math.round(panelRatio * 100)),
-  );
-}
-
 setPanelRatio(panelRatio);
-
-let resizingPointerId = null;
-splitterElement.addEventListener("pointerdown", (event) => {
-  if (event.button !== 0) return;
-  splitterElement.focus({ preventScroll: true });
-  event.preventDefault();
-  resizingPointerId = event.pointerId;
-  splitterElement.classList.add("is-dragging");
-  splitterElement.setPointerCapture(event.pointerId);
-});
-
-splitterElement.addEventListener("pointermove", (event) => {
-  if (resizingPointerId !== event.pointerId) return;
-  const bounds = workspaceElement.getBoundingClientRect();
-  const availableWidth = Math.max(
-    1,
-    bounds.width - splitterElement.offsetWidth,
-  );
-  const leftWidth =
-    event.clientX - bounds.left - splitterElement.offsetWidth / 2;
-  setPanelRatio(leftWidth / availableWidth);
-});
-
-function stopPanelResize(event) {
-  if (resizingPointerId !== event.pointerId) return;
-  resizingPointerId = null;
-  splitterElement.classList.remove("is-dragging");
-  if (splitterElement.hasPointerCapture(event.pointerId))
-    splitterElement.releasePointerCapture(event.pointerId);
-  persistLayout();
-}
-
-splitterElement.addEventListener("pointerup", stopPanelResize);
-splitterElement.addEventListener("pointercancel", stopPanelResize);
-splitterElement.addEventListener("keydown", (event) => {
-  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-    event.preventDefault();
-    setPanelRatio(panelRatio + (event.key === "ArrowRight" ? 0.01 : -0.01));
-    persistLayout();
-  }
-});
 
 window.addEventListener("beforeunload", persistLayout);
