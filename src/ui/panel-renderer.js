@@ -72,6 +72,16 @@ export function renderPanel(
 }
 
 /**
+ * Checks whether the given path is a root path.
+ * @param {string} path - The path to check.
+ * @returns {boolean} - Whether the path is a root path.
+ */
+function isRootPath(path) {
+  if (!path) return true;
+  return /^[a-zA-Z]:[\/\\]?$/.test(path) || path === "/" || path === "\\";
+}
+
+/**
  * Renders the entries for the specified side.
  * @param {string} side - The side of the panel to render entries for.
  * @param {Object} panels - The panels object containing panel data.
@@ -80,6 +90,8 @@ export function renderPanel(
  */
 function renderEntries(side, panels, preferences) {
   const panel = panels[side];
+  const atRoot = isRootPath(panel.path);
+
   if (panel.view === "details") {
     const visibleEntries = panel.entries.filter(
       (entry) => preferences.showHidden || !entry.name.startsWith("."),
@@ -101,22 +113,27 @@ function renderEntries(side, panels, preferences) {
           new Date(b.modified || 0).getTime();
       return comparison * (panel.sortDirection === "asc" ? 1 : -1);
     });
+
     const rows = sortedEntries
       .map((entry) => {
         const index = panel.entries.indexOf(entry);
         return `<tr ${entryAttributes(entry, panels, side, index)}><td><div class="name-cell"><span class="file-icon ${kind(entry)}">${icon(kind(entry))}</span><span class="search-result-label"><span class="file-name" title="${escapeHtml(entry.path)}">${escapeHtml(entry.name)}</span>${panel.searchRoot ? `<span class="search-result-location">${escapeHtml(searchLocation(entry, panel))}</span>` : ""}</span></div></td><td>${formatSize(entry.size, entry.isDirectory)}</td><td class="date-cell">${formatDate(entry.modified, preferences)}</td></tr>`;
       })
       .join("");
+
+    // Render ".." row at the top
+    const parentRow = `<tr class="special-entry-row ${atRoot ? "disabled" : ""}" data-special-entry="up"><td><div class="name-cell"><span class="file-icon folder">${icon("folder")}</span><span class="file-name">..</span></div></td><td>—</td><td class="date-cell">—</td></tr>`;
+
     const colgroup = panel.columns
       .map((width) => `<col style="width:${width}%">`)
       .join("");
     const heading = (key, label, boundary = null) =>
       `<th><button class="column-sort" data-sort="${key}">${label}${panel.sortBy === key ? `<span class="sort-arrow" aria-label="sorted ${panel.sortDirection === "asc" ? "ascending" : "descending"}">${panel.sortDirection === "asc" ? "▲" : "▼"}</span>` : ""}</button>${boundary === null ? "" : `<span class="column-grip" data-column-boundary="${boundary}" title="Resize ${label} column" aria-label="Resize ${label} column"></span>`}</th>`;
-    const emptyState = visibleEntries.length
-      ? ""
-      : `<div class="empty-state">${icon("folder")}<strong>${panel.searchRoot ? "No matches found" : panel.entries.length ? "No visible items" : "This folder is empty"}</strong><span>${panel.searchRoot ? `Search: ${escapeHtml(document.querySelector("#search-query").value)}` : panel.entries.length ? "Hidden items are not shown" : "Drop files here to add them"}</span></div>`;
-    return `<div class="file-area"><table class="file-list" style="--name-width:${panel.columns[0]}%;--size-width:${panel.columns[1]}%;--date-width:${panel.columns[2]}%"><colgroup>${colgroup}</colgroup><thead><tr>${heading("name", "Name", 0)}${heading("size", "Size", 1)}${heading("modified", "Date modified")}</tr></thead><tbody>${rows}</tbody></table>${emptyState}</div>`;
+
+    return `<div class="file-area"><table class="file-list" style="--name-width:${panel.columns[0]}%;--size-width:${panel.columns[1]}%;--date-width:${panel.columns[2]}%"><colgroup>${colgroup}</colgroup><thead><tr>${heading("name", "Name", 0)}${heading("size", "Size", 1)}${heading("modified", "Date modified")}</tr></thead><tbody>${parentRow}${rows}</tbody></table></div>`;
   }
+
+  // Thumbnails View
   const tileSize = panel.iconSize + 48;
   const visibleEntries = panel.entries.filter(
     (entry) => preferences.showHidden || !entry.name.startsWith("."),
@@ -129,13 +146,17 @@ function renderEntries(side, panels, preferences) {
       sensitivity: "base",
     });
   });
+
+  const parentTile = `<div class="icon-tile special-tile ${atRoot ? "disabled" : ""}" data-special-entry="up" style="width:${tileSize}px;height:${tileSize}px"><div class="tile-visual folder" style="width:${panel.iconSize}px;height:${panel.iconSize}px">${icon("folder")}</div><div class="tile-name">..</div></div>`;
+
   const tiles = orderedEntries
     .map(
       (entry) =>
         `<div ${entryAttributes(entry, panels, side, panel.entries.indexOf(entry), true)} style="width:${tileSize}px;height:${tileSize}px"><div class="tile-visual ${kind(entry)}" style="width:${panel.iconSize}px;height:${panel.iconSize}px">${icon(kind(entry))}</div><div class="tile-name" title="${escapeHtml(entry.path)}">${escapeHtml(entry.name)}${panel.searchRoot ? `<span class="search-result-location">${escapeHtml(searchLocation(entry, panel))}</span>` : ""}</div></div>`,
     )
     .join("");
-  return `<div class="file-area"><div class="icon-grid" style="--tile-width:${tileSize}px">${tiles}</div>${visibleEntries.length ? "" : '<div class="empty-state">' + icon("folder") + `<strong>${panel.searchRoot ? "No matches found" : "This folder is empty"}</strong><span>${panel.searchRoot ? "Try another name or pattern" : "Drop files here to add them"}</span>` + "</div>"}</div>`;
+
+  return `<div class="file-area"><div class="icon-grid" style="--tile-width:${tileSize}px">${parentTile}${tiles}</div></div>`;
 }
 
 /**

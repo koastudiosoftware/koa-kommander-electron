@@ -73,10 +73,18 @@ export function refreshSelection(activeSide) {
     const side = panelElement.dataset.panel;
     const panel = panels[side];
     panelElement.classList.toggle("is-active", side === activeSide);
+
     panelElement.querySelectorAll("[data-entry]").forEach((item) => {
       const entry = panel.entries[Number(item.dataset.entry)];
       item.classList.toggle("selected", panel.selected.has(entry.path));
     });
+
+    // Also update the special ".." (up) entry selection state
+    const specialUp = panelElement.querySelector('[data-special-entry="up"]');
+    if (specialUp) {
+      specialUp.classList.toggle("selected", panel.selected.has("__UP__"));
+    }
+
     const bottom = panelElement.querySelector(".panel-bottom");
     if (bottom) bottom.innerHTML = panelStatus(panel);
   });
@@ -245,6 +253,34 @@ export function bindPanel(
     }),
   );
 
+  // Bind the special ".." (up) entry at the top of the panel
+  panelEl.querySelectorAll('[data-special-entry="up"]').forEach((upEl) => {
+    upEl.addEventListener("click", (event) => {
+      if (upEl.classList.contains("disabled")) return;
+      setActiveSideFn(side);
+
+      // Handle single-click selection behavior matching standard files
+      if (event.ctrlKey || event.metaKey) {
+        panel.selected.has("__UP__")
+          ? panel.selected.delete("__UP__")
+          : panel.selected.add("__UP__");
+      } else {
+        panel.selected.clear();
+        panel.selected.add("__UP__");
+      }
+      refreshSelection(getActiveSideFn());
+    });
+
+    upEl.addEventListener("dblclick", async () => {
+      if (upEl.classList.contains("disabled")) return;
+      const parts = pathParts(panel.path);
+      if (parts.length > 1) {
+        const parentPath = parts.at(-2).path;
+        await navigate(side, parentPath);
+      }
+    });
+  });
+
   const sizeSlider = panelEl.querySelector('[data-action="icon-size"]');
   sizeSlider?.addEventListener("input", () => {
     panel.iconSize = Number(sizeSlider.value);
@@ -361,6 +397,11 @@ export function bindPanel(
     const entry = panel.entries[Number(row.dataset.entry)];
     row.addEventListener("click", (event) => {
       setActiveSideFn(side);
+      if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        panel.selected.clear(); // This naturally clears "__UP__" as well!
+      } else {
+        panel.selected.delete("__UP__");
+      }
       if (event.ctrlKey || event.metaKey) {
         panel.selected.has(entry.path)
           ? panel.selected.delete(entry.path)
@@ -442,167 +483,167 @@ export function bindPanel(
     });
   });
 
-const fileArea = panelEl.querySelector(".file-area");
-if (fileArea) {
-  let isSelecting = false;
-  let startX = 0;
-  let startY = 0;
-  let selectionBox = null;
-  let initialSelectedPaths = new Set();
-  let hasDragged = false;
+  const fileArea = panelEl.querySelector(".file-area");
+  if (fileArea) {
+    let isSelecting = false;
+    let startX = 0;
+    let startY = 0;
+    let selectionBox = null;
+    let initialSelectedPaths = new Set();
+    let hasDragged = false;
 
-  // 1. Clean click handler for empty space deselection or panel switching
-  fileArea.addEventListener("click", (event) => {
-    if (
-      event.target.closest("[data-entry]") ||
-      event.target.closest("button") ||
-      event.target.closest("input") ||
-      event.target.closest("thead") ||
-      hasDragged
-    ) {
-      return;
-    }
-
-    const activeSide = getActiveSideFn();
-    if (activeSide === side) {
-      if (panel.selected.size > 0) {
-        panel.selected.clear();
-        refreshSelection(activeSide);
+    // 1. Clean click handler for empty space deselection or panel switching
+    fileArea.addEventListener("click", (event) => {
+      if (
+        event.target.closest("[data-entry]") ||
+        event.target.closest("button") ||
+        event.target.closest("input") ||
+        event.target.closest("thead") ||
+        hasDragged
+      ) {
+        return;
       }
-    } else {
-      setActiveSideFn(side);
-      refreshSelection(side);
-    }
-  });
 
-  // 2. Drag-to-select (Rubber-band box) using pointer events
-  fileArea.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return; // Only left-click
-    if (
-      event.target.closest("[data-entry]") ||
-      event.target.closest("button") ||
-      event.target.closest("input") ||
-      event.target.closest("thead")
-    ) {
-      return;
-    }
-
-    isSelecting = true;
-    hasDragged = false;
-    const rect = fileArea.getBoundingClientRect();
-    startX = event.clientX - rect.left + fileArea.scrollLeft;
-    startY = event.clientY - rect.top + fileArea.scrollTop;
-
-    initialSelectedPaths = new Set(panel.selected);
-    if (!event.ctrlKey && !event.shiftKey) {
-      panel.selected.clear();
-    }
-  });
-
-  fileArea.addEventListener("pointermove", (event) => {
-    if (!isSelecting) return;
-
-    const rect = fileArea.getBoundingClientRect();
-    const currentX = event.clientX - rect.left + fileArea.scrollLeft;
-    const currentY = event.clientY - rect.top + fileArea.scrollTop;
-
-    const deltaX = Math.abs(currentX - startX);
-    const deltaY = Math.abs(currentY - startY);
-
-    if (!hasDragged && (deltaX > 4 || deltaY > 4)) {
-      hasDragged = true;
-      if (!selectionBox) {
-        selectionBox = document.createElement("div");
-        selectionBox.className = "selection-box";
-        fileArea.appendChild(selectionBox);
-      }
-      selectionBox.style.display = "block";
-    }
-
-    if (!hasDragged) return;
-
-    const left = Math.min(startX, currentX);
-    const top = Math.min(startY, currentY);
-    const width = Math.abs(currentX - startX);
-    const height = Math.abs(currentY - startY);
-
-    selectionBox.style.left = `${left}px`;
-    selectionBox.style.top = `${top}px`;
-    selectionBox.style.width = `${width}px`;
-    selectionBox.style.height = `${height}px`;
-
-    const boxRect = {
-      left: fileArea.scrollLeft + left,
-      top: fileArea.scrollTop + top,
-      right: fileArea.scrollLeft + left + width,
-      bottom: fileArea.scrollTop + top + height,
-    };
-
-    fileArea.querySelectorAll("[data-entry]").forEach((row) => {
-      const entryIndex = Number(row.dataset.entry);
-      const entry = panel.entries[entryIndex];
-      if (!entry) return;
-
-      const rowRect = {
-        left: row.offsetLeft,
-        top: row.offsetTop,
-        right: row.offsetLeft + row.offsetWidth,
-        bottom: row.offsetTop + row.offsetHeight,
-      };
-
-      const intersects = !(
-        rowRect.left > boxRect.right ||
-        rowRect.right < boxRect.left ||
-        rowRect.top > boxRect.bottom ||
-        rowRect.bottom < boxRect.top
-      );
-
-      if (intersects) {
-        panel.selected.add(entry.path);
-      } else if (!initialSelectedPaths.has(entry.path) && !event.ctrlKey) {
-        panel.selected.delete(entry.path);
+      const activeSide = getActiveSideFn();
+      if (activeSide === side) {
+        if (panel.selected.size > 0) {
+          panel.selected.clear();
+          refreshSelection(activeSide);
+        }
+      } else {
+        setActiveSideFn(side);
+        refreshSelection(side);
       }
     });
 
-    refreshSelection(getActiveSideFn());
-  });
+    // 2. Drag-to-select (Rubber-band box) using pointer events
+    fileArea.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return; // Only left-click
+      if (
+        event.target.closest("[data-entry]") ||
+        event.target.closest("button") ||
+        event.target.closest("input") ||
+        event.target.closest("thead")
+      ) {
+        return;
+      }
 
-  const endSelection = () => {
-    if (!isSelecting) return;
-    isSelecting = false;
-
-    if (selectionBox) {
-      selectionBox.style.display = "none";
-      selectionBox.remove();
-      selectionBox = null;
-    }
-
-    // Reset hasDragged after a short timeout so the click event can inspect it, then clear it
-    setTimeout(() => {
+      isSelecting = true;
       hasDragged = false;
-    }, 50);
-  };
+      const rect = fileArea.getBoundingClientRect();
+      startX = event.clientX - rect.left + fileArea.scrollLeft;
+      startY = event.clientY - rect.top + fileArea.scrollTop;
 
-  fileArea.addEventListener("pointerup", endSelection);
-  fileArea.addEventListener("pointercancel", endSelection);
+      initialSelectedPaths = new Set(panel.selected);
+      if (!event.ctrlKey && !event.shiftKey) {
+        panel.selected.clear();
+      }
+    });
 
-  // Context Menu & Drop handlers
-  fileArea.addEventListener("contextmenu", (event) => {
-    if (event.target.closest("[data-entry]")) return;
-    event.preventDefault();
-    setActiveSideFn(side);
-    refreshSelection(side);
-    showBackgroundContextMenu(event.clientX, event.clientY, side);
-  });
+    fileArea.addEventListener("pointermove", (event) => {
+      if (!isSelecting) return;
 
-  fileArea.addEventListener("drop", async (event) => {
-    if (event.target.closest("[data-entry]")) return;
-    event.preventDefault();
-    await handleDrop(event, side, panel.path);
-  });
+      const rect = fileArea.getBoundingClientRect();
+      const currentX = event.clientX - rect.left + fileArea.scrollLeft;
+      const currentY = event.clientY - rect.top + fileArea.scrollTop;
 
-  fileArea.addEventListener("dragover", (event) => {
-    event.preventDefault();
-  });
-}
+      const deltaX = Math.abs(currentX - startX);
+      const deltaY = Math.abs(currentY - startY);
+
+      if (!hasDragged && (deltaX > 4 || deltaY > 4)) {
+        hasDragged = true;
+        if (!selectionBox) {
+          selectionBox = document.createElement("div");
+          selectionBox.className = "selection-box";
+          fileArea.appendChild(selectionBox);
+        }
+        selectionBox.style.display = "block";
+      }
+
+      if (!hasDragged) return;
+
+      const left = Math.min(startX, currentX);
+      const top = Math.min(startY, currentY);
+      const width = Math.abs(currentX - startX);
+      const height = Math.abs(currentY - startY);
+
+      selectionBox.style.left = `${left}px`;
+      selectionBox.style.top = `${top}px`;
+      selectionBox.style.width = `${width}px`;
+      selectionBox.style.height = `${height}px`;
+
+      const boxRect = {
+        left: fileArea.scrollLeft + left,
+        top: fileArea.scrollTop + top,
+        right: fileArea.scrollLeft + left + width,
+        bottom: fileArea.scrollTop + top + height,
+      };
+
+      fileArea.querySelectorAll("[data-entry]").forEach((row) => {
+        const entryIndex = Number(row.dataset.entry);
+        const entry = panel.entries[entryIndex];
+        if (!entry) return;
+
+        const rowRect = {
+          left: row.offsetLeft,
+          top: row.offsetTop,
+          right: row.offsetLeft + row.offsetWidth,
+          bottom: row.offsetTop + row.offsetHeight,
+        };
+
+        const intersects = !(
+          rowRect.left > boxRect.right ||
+          rowRect.right < boxRect.left ||
+          rowRect.top > boxRect.bottom ||
+          rowRect.bottom < boxRect.top
+        );
+
+        if (intersects) {
+          panel.selected.add(entry.path);
+        } else if (!initialSelectedPaths.has(entry.path) && !event.ctrlKey) {
+          panel.selected.delete(entry.path);
+        }
+      });
+
+      refreshSelection(getActiveSideFn());
+    });
+
+    const endSelection = () => {
+      if (!isSelecting) return;
+      isSelecting = false;
+
+      if (selectionBox) {
+        selectionBox.style.display = "none";
+        selectionBox.remove();
+        selectionBox = null;
+      }
+
+      // Reset hasDragged after a short timeout so the click event can inspect it, then clear it
+      setTimeout(() => {
+        hasDragged = false;
+      }, 50);
+    };
+
+    fileArea.addEventListener("pointerup", endSelection);
+    fileArea.addEventListener("pointercancel", endSelection);
+
+    // Context Menu & Drop handlers
+    fileArea.addEventListener("contextmenu", (event) => {
+      if (event.target.closest("[data-entry]")) return;
+      event.preventDefault();
+      setActiveSideFn(side);
+      refreshSelection(side);
+      showBackgroundContextMenu(event.clientX, event.clientY, side);
+    });
+
+    fileArea.addEventListener("drop", async (event) => {
+      if (event.target.closest("[data-entry]")) return;
+      event.preventDefault();
+      await handleDrop(event, side, panel.path);
+    });
+
+    fileArea.addEventListener("dragover", (event) => {
+      event.preventDefault();
+    });
+  }
 }

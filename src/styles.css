@@ -632,7 +632,24 @@ kbd {
   margin: 0 3px;
 }
 
+/* ============================================================================
+ * SPECIAL ".." (UP) ENTRY STYLING
+ * ============================================================================ */
+.file-list tr.special-entry-row {
+  cursor: default;
+}
 
+.file-list tr.special-entry-row.disabled,
+.icon-tile.special-tile.disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+.file-list tr.special-entry-row.disabled tbody tr:hover,
+.icon-tile.special-tile.disabled:hover {
+  background: transparent;
+}
 
 
 
