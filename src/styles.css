@@ -342,10 +342,11 @@ kbd {
   accent-color: #2563eb;
 }
 .file-area {
-  min-height: 0;
   flex: 1;
+  min-height: 0;
   overflow: auto;
   position: relative;
+  user-select: none; /* Prevents text/header highlighting */
 }
 .file-list {
   width: 100%;
@@ -499,13 +500,13 @@ kbd {
 }
 .icon-grid {
   display: grid;
-  grid-template-columns: repeat(
-    auto-fill,
-    minmax(var(--tile-width, 92px), 1fr)
-  );
+  grid-template-columns: repeat(auto-fill, var(--tile-width, 92px));
+  justify-content: start;
   align-content: start;
   gap: 6px;
   padding: 12px;
+  min-height: 100%;
+  box-sizing: border-box;
 }
 .icon-tile {
   min-width: 0;
@@ -636,6 +637,15 @@ kbd {
 
 
 
+
+.selection-box {
+  position: absolute;
+  border: 1px solid #3b82f6;
+  background-color: rgba(59, 130, 246, 0.15);
+  pointer-events: none;
+  z-index: 10;
+  display: none;
+}
 
 
 

@@ -27,6 +27,11 @@ let panels,
   handleDrop,
   onOpenDirectorySets;
 
+/**
+ * Initializes the panel interaction service with the provided configuration.
+ * @param {Object} config - The configuration object containing service dependencies.
+ * @returns {void}
+ */
 export function initPanelInteractionService(config) {
   panels = config.panels;
   currentActiveSide = config.currentActiveSide; // Can be getter or value
@@ -47,12 +52,22 @@ export function initPanelInteractionService(config) {
   onOpenDirectorySets = config.onOpenDirectorySets;
 }
 
+
+/**
+ * Gets the current active panel side.
+ * @returns {string} The active panel side.
+ */
 export function getActiveSideRef() {
   return typeof currentActiveSide === "function"
     ? currentActiveSide()
     : currentActiveSide;
 }
 
+/**
+ * Refreshes the selection state and status for all panels.
+ * @param {string} activeSide - The active panel side.
+ * @returns {void}
+ */
 export function refreshSelection(activeSide) {
   document.querySelectorAll(".panel").forEach((panelElement) => {
     const side = panelElement.dataset.panel;
@@ -68,6 +83,12 @@ export function refreshSelection(activeSide) {
   updateSummary();
 }
 
+/**
+ * Creates a new folder in the specified panel.
+ * @param {string} side - The panel side in which to create the folder.
+ * @param {string} activeSide - The active panel side.
+ * @returns {Promise<void>}
+ */
 export async function createFolder(side, activeSide) {
   const parent = panels[side].path;
   const name = await askForName({
@@ -84,6 +105,12 @@ export async function createFolder(side, activeSide) {
   }
 }
 
+/**
+ * Enables inline editing of a panel's path.
+ * @param {string} side - The panel side to edit.
+ * @param {string} activeSide - The active panel side.
+ * @returns {void}
+ */
 export function editPanelPath(side, activeSide) {
   const panel = panels[side];
   const panelEl = getPanelElement(side);
@@ -133,6 +160,38 @@ export function editPanelPath(side, activeSide) {
   });
 }
 
+
+/**
+ * Updates the enabled state of the back and forward toolbar buttons.
+ * @param {Object} panels - The panel state for each side.
+ * @param {string} activeSide - The active panel side.
+ */
+export function updateToolbarState(panels, activeSide) {
+  const panel = panels[activeSide];
+  const backBtn = document.querySelector('[data-action="back"]');
+  const forwardBtn = document.querySelector('[data-action="forward"]');
+
+  if (backBtn) {
+    const canBack = panel && panel.historyIndex > 0;
+    backBtn.disabled = !canBack;
+  }
+  if (forwardBtn) {
+    const canForward =
+      panel &&
+      panel.historyIndex >= 0 &&
+      panel.historyIndex < panel.history.length - 1;
+    forwardBtn.disabled = !canForward;
+  }
+}
+
+/**
+ * Binds the interaction handlers for a panel.
+ * @param {string} side - The panel side to bind.
+ * @param {Function} getActiveSideFn - Gets the active panel side.
+ * @param {Function} setActiveSideFn - Sets the active panel side.
+ * @param {Function} applyThumbnailSize - Applies the panel's thumbnail size.
+ * @returns {void}
+ */
 export function bindPanel(
   side,
   getActiveSideFn,
@@ -371,86 +430,167 @@ export function bindPanel(
     });
   });
 
-  panelEl
-    .querySelector(".file-area")
-    ?.addEventListener("dragover", (event) => event.preventDefault());
+const fileArea = panelEl.querySelector(".file-area");
+if (fileArea) {
+  let isSelecting = false;
+  let startX = 0;
+  let startY = 0;
+  let selectionBox = null;
+  let initialSelectedPaths = new Set();
+  let hasDragged = false;
 
-  panelEl
-    .querySelector(".file-area")
-    ?.addEventListener("contextmenu", (event) => {
-      if (event.target.closest("[data-entry]")) return;
-      event.preventDefault();
-      setActiveSideFn(side);
-      getPanelElement("left").classList.toggle("is-active", side === "left");
-      getPanelElement("right").classList.toggle("is-active", side === "right");
-      updateSummary();
-      showBackgroundContextMenu(event.clientX, event.clientY, side);
-    });
-
-  panelEl
-    .querySelector(".file-area")
-    ?.addEventListener("drop", async (event) => {
-      if (event.target.closest("[data-entry]")) return;
-      event.preventDefault();
-      await handleDrop(event, side, panel.path);
-    });
-
-  panelEl.querySelector(".file-area")?.addEventListener("click", (event) => {
-    if (event.target.closest("[data-entry]")) return;
+  // 1. Clean click handler for empty space deselection or panel switching
+  fileArea.addEventListener("click", (event) => {
+    if (
+      event.target.closest("[data-entry]") ||
+      event.target.closest("button") ||
+      event.target.closest("input") ||
+      event.target.closest("thead") ||
+      hasDragged
+    ) {
+      return;
+    }
 
     const activeSide = getActiveSideFn();
-
     if (activeSide === side) {
-      // Clicking empty space in the ALREADY active panel deselects items
       if (panel.selected.size > 0) {
         panel.selected.clear();
         refreshSelection(activeSide);
       }
     } else {
-      // Clicking empty space in the INACTIVE panel switches focus WITHOUT deselecting items
       setActiveSideFn(side);
       refreshSelection(side);
     }
   });
 
-  panelEl
-    .querySelector(".file-area")
-    ?.addEventListener("contextmenu", (event) => {
-      if (event.target.closest("[data-entry]")) return;
-      event.preventDefault();
-      setActiveSideFn(side);
-      refreshSelection(side);
-      showBackgroundContextMenu(event.clientX, event.clientY, side);
+  // 2. Drag-to-select (Rubber-band box) using pointer events
+  fileArea.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return; // Only left-click
+    if (
+      event.target.closest("[data-entry]") ||
+      event.target.closest("button") ||
+      event.target.closest("input") ||
+      event.target.closest("thead")
+    ) {
+      return;
+    }
+
+    isSelecting = true;
+    hasDragged = false;
+    const rect = fileArea.getBoundingClientRect();
+    startX = event.clientX - rect.left + fileArea.scrollLeft;
+    startY = event.clientY - rect.top + fileArea.scrollTop;
+
+    initialSelectedPaths = new Set(panel.selected);
+    if (!event.ctrlKey && !event.shiftKey) {
+      panel.selected.clear();
+    }
+  });
+
+  fileArea.addEventListener("pointermove", (event) => {
+    if (!isSelecting) return;
+
+    const rect = fileArea.getBoundingClientRect();
+    const currentX = event.clientX - rect.left + fileArea.scrollLeft;
+    const currentY = event.clientY - rect.top + fileArea.scrollTop;
+
+    const deltaX = Math.abs(currentX - startX);
+    const deltaY = Math.abs(currentY - startY);
+
+    if (!hasDragged && (deltaX > 4 || deltaY > 4)) {
+      hasDragged = true;
+      if (!selectionBox) {
+        selectionBox = document.createElement("div");
+        selectionBox.className = "selection-box";
+        fileArea.appendChild(selectionBox);
+      }
+      selectionBox.style.display = "block";
+    }
+
+    if (!hasDragged) return;
+
+    const left = Math.min(startX, currentX);
+    const top = Math.min(startY, currentY);
+    const width = Math.abs(currentX - startX);
+    const height = Math.abs(currentY - startY);
+
+    selectionBox.style.left = `${left}px`;
+    selectionBox.style.top = `${top}px`;
+    selectionBox.style.width = `${width}px`;
+    selectionBox.style.height = `${height}px`;
+
+    const boxRect = {
+      left: fileArea.scrollLeft + left,
+      top: fileArea.scrollTop + top,
+      right: fileArea.scrollLeft + left + width,
+      bottom: fileArea.scrollTop + top + height,
+    };
+
+    fileArea.querySelectorAll("[data-entry]").forEach((row) => {
+      const entryIndex = Number(row.dataset.entry);
+      const entry = panel.entries[entryIndex];
+      if (!entry) return;
+
+      const rowRect = {
+        left: row.offsetLeft,
+        top: row.offsetTop,
+        right: row.offsetLeft + row.offsetWidth,
+        bottom: row.offsetTop + row.offsetHeight,
+      };
+
+      const intersects = !(
+        rowRect.left > boxRect.right ||
+        rowRect.right < boxRect.left ||
+        rowRect.top > boxRect.bottom ||
+        rowRect.bottom < boxRect.top
+      );
+
+      if (intersects) {
+        panel.selected.add(entry.path);
+      } else if (!initialSelectedPaths.has(entry.path) && !event.ctrlKey) {
+        panel.selected.delete(entry.path);
+      }
     });
 
-  panelEl
-    .querySelector(".file-area")
-    ?.addEventListener("drop", async (event) => {
-      if (event.target.closest("[data-entry]")) return;
-      event.preventDefault();
-      await handleDrop(event, side, panel.path);
-    });
+    refreshSelection(getActiveSideFn());
+  });
+
+  const endSelection = () => {
+    if (!isSelecting) return;
+    isSelecting = false;
+
+    if (selectionBox) {
+      selectionBox.style.display = "none";
+      selectionBox.remove();
+      selectionBox = null;
+    }
+
+    // Reset hasDragged after a short timeout so the click event can inspect it, then clear it
+    setTimeout(() => {
+      hasDragged = false;
+    }, 50);
+  };
+
+  fileArea.addEventListener("pointerup", endSelection);
+  fileArea.addEventListener("pointercancel", endSelection);
+
+  // Context Menu & Drop handlers
+  fileArea.addEventListener("contextmenu", (event) => {
+    if (event.target.closest("[data-entry]")) return;
+    event.preventDefault();
+    setActiveSideFn(side);
+    refreshSelection(side);
+    showBackgroundContextMenu(event.clientX, event.clientY, side);
+  });
+
+  fileArea.addEventListener("drop", async (event) => {
+    if (event.target.closest("[data-entry]")) return;
+    event.preventDefault();
+    await handleDrop(event, side, panel.path);
+  });
+
+  fileArea.addEventListener("dragover", (event) => {
+    event.preventDefault();
+  });
 }
-
-/**
- * Updates the enabled state of the back and forward toolbar buttons.
- * @param {Object} panels - The panel state for each side.
- * @param {string} activeSide - The active panel side.
- */
-export function updateToolbarState(panels, activeSide) {
-  const panel = panels[activeSide];
-  const backBtn = document.querySelector('[data-action="back"]');
-  const forwardBtn = document.querySelector('[data-action="forward"]');
-
-  if (backBtn) {
-    const canBack = panel && panel.historyIndex > 0;
-    backBtn.disabled = !canBack;
-  }
-  if (forwardBtn) {
-    const canForward =
-      panel &&
-      panel.historyIndex >= 0 &&
-      panel.historyIndex < panel.history.length - 1;
-    forwardBtn.disabled = !canForward;
-  }
 }
