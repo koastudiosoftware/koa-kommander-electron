@@ -394,6 +394,42 @@ export function bindPanel(
       event.preventDefault();
       await handleDrop(event, side, panel.path);
     });
+
+  panelEl.querySelector(".file-area")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-entry]")) return;
+
+    const activeSide = getActiveSideFn();
+
+    if (activeSide === side) {
+      // Clicking empty space in the ALREADY active panel deselects items
+      if (panel.selected.size > 0) {
+        panel.selected.clear();
+        refreshSelection(activeSide);
+      }
+    } else {
+      // Clicking empty space in the INACTIVE panel switches focus WITHOUT deselecting items
+      setActiveSideFn(side);
+      refreshSelection(side);
+    }
+  });
+
+  panelEl
+    .querySelector(".file-area")
+    ?.addEventListener("contextmenu", (event) => {
+      if (event.target.closest("[data-entry]")) return;
+      event.preventDefault();
+      setActiveSideFn(side);
+      refreshSelection(side);
+      showBackgroundContextMenu(event.clientX, event.clientY, side);
+    });
+
+  panelEl
+    .querySelector(".file-area")
+    ?.addEventListener("drop", async (event) => {
+      if (event.target.closest("[data-entry]")) return;
+      event.preventDefault();
+      await handleDrop(event, side, panel.path);
+    });
 }
 
 /**
