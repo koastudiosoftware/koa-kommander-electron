@@ -19,6 +19,7 @@ import {
 } from "./ui/panel-interaction-service.js";
 
 import {
+  actionIcon,
   escapeHtml,
   formatSize,
   setStatus,
@@ -688,35 +689,36 @@ directorySetMenu.addEventListener("click", async (event) => {
 // ============================================================================
 
 function showContextMenu(x, y, side, entry) {
-  const openAction = [
-    "Open",
-    "Enter",
-    () =>
-      window.fileManager
-        .open(entry.path)
-        .then(
-          (result) => result.navigateTo && navigate(side, result.navigateTo),
-        ),
+  const topActions = [
+    ["Cut", "Ctrl+X", "cut", () => copySelection(side, true)],
+    ["Copy", "Ctrl+C", "copy", () => copySelection(side, false)],
+    ["Paste", "Ctrl+V", "paste", () => pasteSelection()],
+    ["Rename", "", "rename", () => renameSelection(side)],
+    ["Delete", "Delete", "delete", () => deleteSelection(side)],
   ];
 
-  const actions = [
-    openAction,
-    ["Copy", "Ctrl+C", () => copySelection(side, false)],
-    ["Cut", "Ctrl+X", () => copySelection(side, true)],
-    ["Paste", "Ctrl+V", () => pasteSelection()],
-    ["Rename", "", () => renameSelection(side)],
-    ["Delete", "Delete", () => deleteSelection(side)],
+  const mainActions = [
+    [
+      "Open",
+      "Enter",
+      () =>
+        window.fileManager
+          .open(entry.path)
+          .then(
+            (result) => result.navigateTo && navigate(side, result.navigateTo),
+          ),
+    ],
   ];
 
   if (entry.isDirectory) {
-    actions.push([
+    mainActions.push([
       "Open in File Explorer",
       "",
       () => window.fileManager.openInFileManager(entry.path),
     ]);
   }
 
-  actions.push([
+  mainActions.push([
     "Properties",
     "",
     async () => {
@@ -727,24 +729,56 @@ function showContextMenu(x, y, side, entry) {
       }
     },
   ]);
-  const separators = new Set([1, 5, actions.length - 1]);
-  if (entry.isDirectory) separators.add(actions.length - 2);
-  menu.innerHTML = actions
+
+  const topRowHtml = `
+    <div class="context-menu-top-row">
+      ${topActions
+        .map(
+          ([label, shortcut, actionKey], i) => `
+        <button role="menuitem" class="context-top-button" data-top-action="${actionKey}" title="${label}">
+          ${actionIcon(actionKey)}
+          <span>${label}</span>
+        </button>
+      `,
+        )
+        .join("")}
+    </div>
+    <div class="menu-separator"></div>
+  `;
+
+  const mainHtml = mainActions
     .map(
       ([label, shortcut], index) =>
-        `${separators.has(index) ? '<div class="menu-separator"></div>' : ""}<button role="menuitem" data-menu-index="${index}">${label}<kbd>${shortcut}</kbd></button>`,
+        `<button role="menuitem" data-menu-index="${index}">${label}<kbd>${shortcut}</kbd></button>`,
     )
     .join("");
+
+  menu.innerHTML = topRowHtml + mainHtml;
   menu.hidden = false;
-  menu.style.left = `${Math.min(x, innerWidth - 218)}px`;
-  menu.style.top = `${Math.min(y, innerHeight - 220)}px`;
-  menu.querySelectorAll("[data-menu-index]").forEach((button) =>
+  menu.style.left = `${Math.min(x, innerWidth - 230)}px`;
+  menu.style.top = `${Math.min(y, innerHeight - 280)}px`;
+
+  // Bind top toolbar actions
+  menu.querySelectorAll("[data-top-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      menu.hidden = true;
+      const actionKey = button.dataset.topAction;
+      if (actionKey === "cut") copySelection(side, true);
+      else if (actionKey === "copy") copySelection(side, false);
+      else if (actionKey === "rename") renameSelection(side);
+      else if (actionKey === "delete") deleteSelection(side);
+    });
+  });
+
+  // Bind main menu actions
+  menu.querySelectorAll("[data-menu-index]").forEach((button) => {
     button.addEventListener("click", () => {
       menu.hidden = true;
       const index = Number(button.dataset.menuIndex);
-      actions[index][2]();
-    }),
-  );
+      mainActions[index][2]();
+    });
+  });
+
   document.addEventListener("mousedown", hideMenu, { once: true });
 }
 

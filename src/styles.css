@@ -630,10 +630,90 @@ kbd {
   background: #cbd5e1;
   margin: 0 3px;
 }
+
+
+
+
+
+
+
+
+
+
+.context-menu {
+  width: 276px;
+  box-sizing: border-box;
+}
+.context-menu-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 4px;
+  background: #f8fafc;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  box-sizing: border-box;
+}
+.context-top-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 44px;      /* Enforces a compact, equal fixed width for all buttons */
+  height: 48px;     /* Enforces an equal fixed height */
+  flex-shrink: 0;   /* Prevents buttons from expanding or collapsing */
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #334155;
+  cursor: pointer;
+  font: 9px "Segoe UI", sans-serif;
+  gap: 3px;
+  padding: 0;
+}
+.context-top-button:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+.context-top-button img.svg-icon {
+  width: 21px;
+  height: 21px;
+  object-fit: contain;
+  filter: invert(33%) sepia(12%) saturate(500%) hue-rotate(180deg) brightness(90%) contrast(90%);
+}
+.context-menu .context-top-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 42px !important;    /* Forces strict equal width */
+  min-width: 42px;
+  max-width: 42px;
+  height: 48px;
+  flex: 1;                   /* Distributes available space evenly */
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #334155;
+  cursor: pointer;
+  font: 9px "Segoe UI", sans-serif;
+  gap: 3px;
+  padding: 0;
+}
+
+
+
+
+
+
+
+
 .context-menu {
   position: fixed;
   z-index: 20;
-  width: 208px;
+  /* width: 208px; */
   background: #ffffff;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
@@ -2441,6 +2521,31 @@ kbd {
   filter: invert(100%) sepia(38%) saturate(274%) hue-rotate(175deg)
     brightness(100%) contrast(92%);
 }
+
+
+
+
+
+
+:root[data-theme="dark"] .context-menu-top-row {
+  background: #0f172a;
+}
+:root[data-theme="dark"] .context-top-button {
+  color: #cbd5e1;
+}
+:root[data-theme="dark"] .context-top-button:hover {
+  background: #334155;
+  color: #ffffff;
+}
+:root[data-theme="dark"] .context-top-button img.svg-icon {
+  filter: invert(100%) sepia(38%) saturate(274%) hue-rotate(175deg) brightness(100%) contrast(92%);
+}
+
+
+
+
+
+
 
 :root[data-theme="dark"] .setting-field select {
   background: #0f172a;
