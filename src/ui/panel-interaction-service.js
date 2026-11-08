@@ -91,15 +91,27 @@ export function refreshSelection(activeSide) {
  */
 export async function createFolder(side, activeSide) {
   const parent = panels[side].path;
-  const name = await askForName({
+  const nameInput = await askForName({
     title: "New folder",
     label: "Folder name",
     confirmLabel: "Create folder",
   });
-  if (name === null || !name.trim()) return;
+  if (nameInput === null || !nameInput.trim()) return;
+  const trimmedName = nameInput.trim();
   try {
-    await window.fileManager.createFolder({ parent, name: name.trim() });
-    await navigate(side, parent);
+    await window.fileManager.createFolder({ parent, name: trimmedName });
+    const success = await navigate(side, parent);
+    if (success) {
+      const panel = panels[side];
+      panel.selected.clear();
+      const newEntry = panel.entries.find(
+        (entry) => entry.name === trimmedName,
+      );
+      if (newEntry) {
+        panel.selected.add(newEntry.path);
+      }
+      refreshSelection(side);
+    }
   } catch (error) {
     toast(error.message);
   }
