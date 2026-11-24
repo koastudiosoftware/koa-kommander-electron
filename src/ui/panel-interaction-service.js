@@ -464,8 +464,16 @@ export function bindPanel(
         panel.selected.add(entry.path);
       }
       const paths = getSelected(side).map((item) => item.path);
-      event.preventDefault();
-      window.fileManager.startNativeFileDrag(paths);
+      if (event.altKey) {
+        event.preventDefault();
+        window.fileManager.startNativeFileDrag(paths);
+      } else {
+        event.dataTransfer.setData(
+          "application/x-koa-files",
+          JSON.stringify({ side, paths }),
+        );
+        event.dataTransfer.effectAllowed = "copyMove";
+      }
       setTimeout(() => refreshSelection(getActiveSideFn()), 0);
     });
 
