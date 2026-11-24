@@ -80,16 +80,30 @@ export function directorySetDetails(set) {
 export function orderedDirectorySets() {
   const prefs = preferences();
   const items = prefs.directorySets.map((set, index) => ({ set, index }));
-  if (prefs.directorySetSort === "alphabetical") {
-    items.sort((a, b) =>
-      directorySetLabel(a.set).localeCompare(
+  items.sort((a, b) => {
+    const groupOrder = Number(a.set.type === "pair") - Number(b.set.type === "pair");
+    if (groupOrder) return groupOrder;
+    if (prefs.directorySetSort === "alphabetical")
+      return directorySetLabel(a.set).localeCompare(
         directorySetLabel(b.set),
         undefined,
         { numeric: true, sensitivity: "base" },
-      ),
-    );
-  }
+      );
+    return a.index - b.index;
+  });
   return items;
+}
+
+/**
+ * Splits directory sets into single-location and left/right groups.
+ * @param {Array<{set: Object, index: number}>} items
+ * @returns {{single: Array, pair: Array}}
+ */
+export function groupDirectorySets(items = orderedDirectorySets()) {
+  return {
+    single: items.filter(({ set }) => set.type !== "pair"),
+    pair: items.filter(({ set }) => set.type === "pair"),
+  };
 }
 
 /**
@@ -149,20 +163,25 @@ export function showDirectorySetMenu(side, target, currentActiveSide) {
   buttonEl.setAttribute("aria-expanded", "true");
 
   const orderedSets = orderedDirectorySets();
-  directorySetMenu.innerHTML = orderedSets.length
-    ? orderedSets
-        .map(
-          ({ set, index }) =>
-            `<button role="menuitem" data-menu-directory-set="${index}"><strong>${escapeHtml(directorySetLabel(set))}</strong><span class="directory-set-locations">${directorySetDetails(
-              set,
-            )
-              .map(
-                ([label, directory]) =>
-                  `<span class="directory-set-location-label">${escapeHtml(label)}</span><span class="directory-set-location-path">${escapeHtml(directory || "")}</span>`,
+  const groups = groupDirectorySets(orderedSets);
+  const renderGroup = (items, title) =>
+    items.length
+      ? `<div class="directory-set-menu-group-title">${title}</div>${items
+          .map(
+            ({ set, index }) =>
+              `<button role="menuitem" data-menu-directory-set="${index}"><strong>${escapeHtml(directorySetLabel(set))}</strong><span class="directory-set-locations">${directorySetDetails(
+                set,
               )
-              .join("")}</span></button>`,
-        )
-        .join("")
+                .map(
+                  ([label, directory]) =>
+                    `<span class="directory-set-location-label">${escapeHtml(label)}</span><span class="directory-set-location-path">${escapeHtml(directory || "")}</span>`,
+                )
+                .join("")}</span></button>`,
+          )
+          .join("")}`
+      : "";
+  directorySetMenu.innerHTML = orderedSets.length
+    ? `${renderGroup(groups.single, "Single directory")}${renderGroup(groups.pair, "Left / Right pair")}`
     : '<div class="directory-set-menu-empty">No directory sets saved.</div>';
 
   // Unhide first so the browser can accurately measure offsetWidth/height
@@ -200,15 +219,23 @@ export function renderDirectorySets() {
     settingsContent.innerHTML = `<h2>${draft.index === null ? "New directory set" : "Edit directory set"}</h2><p class="settings-description">Save one location or a left/right directory pair.</p><label class="directory-set-field"><span>Name <small>(optional)</small></span><input data-set-field="name" value="${escapeHtml(draft.name || "")}" placeholder="For example, Project files"></label><label class="directory-set-field"><span>Set type</span><select data-set-field="type"><option value="single" ${!isPair ? "selected" : ""}>Single directory</option><option value="pair" ${isPair ? "selected" : ""}>Directory pair</option></select></label>${isPair ? `<div class="directory-set-field"><span>Left panel directory</span><div class="directory-path-input"><input data-set-field="leftPath" value="${escapeHtml(draft.leftPath || "")}" placeholder="Choose a folder"><button data-browse-field="leftPath">Browse…</button><button data-use-panel="left" title="Use current left panel folder">Use left</button></div></div><div class="directory-set-field"><span>Right panel directory</span><div class="directory-path-input"><input data-set-field="rightPath" value="${escapeHtml(draft.rightPath || "")}" placeholder="Choose a folder"><button data-browse-field="rightPath">Browse…</button><button data-use-panel="right" title="Use current right panel folder">Use right</button></div></div><p class="settings-hint">Opening a pair places its left and right directories in their matching panels.</p>` : `<div class="directory-set-field"><span>Directory</span><div class="directory-path-input"><input data-set-field="path" value="${escapeHtml(draft.path || "")}" placeholder="Choose a folder"><button data-browse-field="path">Browse…</button><button data-use-panel="left" title="Use current left panel folder">Use left</button><button data-use-panel="right" title="Use current right panel folder">Use right</button></div></div><label class="directory-set-field"><span>Open in panel</span><select data-set-field="openIn"><option value="active" ${draft.openIn === "active" ? "selected" : ""}>Active panel</option><option value="left" ${draft.openIn === "left" ? "selected" : ""}>Left panel</option><option value="right" ${draft.openIn === "right" ? "selected" : ""}>Right panel</option></select></label>`}<div class="directory-set-form-actions"><button class="settings-secondary" data-cancel-set>Back</button><button class="settings-primary" data-save-set>Save directory set</button></div>`;
     return;
   }
-  const items = orderedDirectorySets()
-    .map(({ set, index }) => {
-      const description =
-        set.type === "pair"
-          ? `Left: ${set.leftPath} · Right: ${set.rightPath}`
-          : `${set.path} · Opens in ${set.openIn === "active" ? "active panel" : `${set.openIn} panel`}`;
-      return `<div class="directory-set-row" draggable="${prefs.directorySetSort === "manual"}" data-sortable-set="${index}"><div class="directory-set-summary"><strong>${escapeHtml(directorySetLabel(set))}</strong><small>${escapeHtml(description)}</small></div><button class="directory-set-open" data-open-set="${index}">Open</button><button class="bookmark-remove" data-edit-set="${index}" aria-label="Edit directory set" title="Edit">✎</button><button class="bookmark-remove" data-remove-set="${index}" aria-label="Remove directory set" title="Remove">×</button></div>`;
-    })
-    .join("");
+  const orderedSets = orderedDirectorySets();
+  const groups = groupDirectorySets(orderedSets);
+  let displayPosition = 0;
+  const renderGroup = (entries, title) =>
+    entries.length
+      ? `<section class="directory-set-group"><h3>${title}</h3>${entries
+          .map(({ set, index }) => {
+            const position = displayPosition++;
+            const description =
+              set.type === "pair"
+                ? `Left: ${set.leftPath} · Right: ${set.rightPath}`
+                : `${set.path} · Opens in ${set.openIn === "active" ? "active panel" : `${set.openIn} panel`}`;
+            return `<div class="directory-set-row" draggable="${prefs.directorySetSort === "manual"}" data-sortable-set="${index}" data-sort-position="${position}" data-set-group="${set.type === "pair" ? "pair" : "single"}"><div class="directory-set-summary"><strong>${escapeHtml(directorySetLabel(set))}</strong><small>${escapeHtml(description)}</small></div><button class="directory-set-open" data-open-set="${index}">Open</button><button class="bookmark-remove" data-edit-set="${index}" aria-label="Edit directory set" title="Edit">✎</button><button class="bookmark-remove" data-remove-set="${index}" aria-label="Remove directory set" title="Remove">×</button></div>`;
+          })
+          .join("")}</section>`
+      : "";
+  const items = `${renderGroup(groups.single, "Single directory")}${renderGroup(groups.pair, "Left / Right pair")}`;
   settingsContent.innerHTML = `<h2>Directory Sets</h2><p class="settings-description">Save a single location or a left/right pair, then open it in your preferred panel arrangement.</p><label class="setting-field directory-set-sort-field"><span>Sort directory sets</span><select data-preference="directorySetSort"><option value="manual" ${prefs.directorySetSort === "manual" ? "selected" : ""}>Manual (drag to reorder)</option><option value="alphabetical" ${prefs.directorySetSort === "alphabetical" ? "selected" : ""}>Alphabetically by title</option></select></label><button class="settings-primary" data-new-set>New directory set</button><div class="directory-set-list">${items || '<p class="settings-empty">No directory sets yet.</p>'}</div>`;
 }
 

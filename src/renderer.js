@@ -57,6 +57,7 @@ import {
   closeDirectorySetMenu,
   openDirectorySet,
   orderedDirectorySets,
+  groupDirectorySets,
   directorySetLabel,
   directorySetDetails,
   renderDirectorySets,
@@ -325,20 +326,25 @@ initPanelInteractionService({
         '<div class="menu-item" style="padding: 8px 12px; color: #666;">No directory sets saved</div>';
     } else {
       const orderedSets = orderedDirectorySets();
-      directorySetMenu.innerHTML = orderedSets.length
-        ? orderedSets
-            .map(
-              ({ set, index }) =>
-                `<button role="menuitem" data-menu-directory-set="${index}"><strong>${escapeHtml(directorySetLabel(set))}</strong><span class="directory-set-locations">${directorySetDetails(
-                  set,
-                )
-                  .map(
-                    ([label, directory]) =>
-                      `<span class="directory-set-location-label">${escapeHtml(label)}</span><span class="directory-set-location-path">${escapeHtml(directory || "")}</span>`,
+      const groups = groupDirectorySets(orderedSets);
+      const renderGroup = (items, title) =>
+        items.length
+          ? `<div class="directory-set-menu-group-title">${title}</div>${items
+              .map(
+                ({ set, index }) =>
+                  `<button role="menuitem" data-menu-directory-set="${index}"><strong>${escapeHtml(directorySetLabel(set))}</strong><span class="directory-set-locations">${directorySetDetails(
+                    set,
                   )
-                  .join("")}</span></button>`,
-            )
-            .join("")
+                    .map(
+                      ([label, directory]) =>
+                        `<span class="directory-set-location-label">${escapeHtml(label)}</span><span class="directory-set-location-path">${escapeHtml(directory || "")}</span>`,
+                    )
+                    .join("")}</span></button>`,
+              )
+              .join("")}`
+          : "";
+      directorySetMenu.innerHTML = orderedSets.length
+        ? `${renderGroup(groups.single, "Single directory")}${renderGroup(groups.pair, "Left / Right pair")}`
         : '<div class="directory-set-menu-empty">No directory sets saved.</div>';
     }
 
@@ -1293,7 +1299,7 @@ settingsContent.addEventListener("dragstart", (event) => {
     event.preventDefault();
     return;
   }
-  event.dataTransfer.setData("text/plain", row.dataset.sortableSet);
+  event.dataTransfer.setData("text/plain", row.dataset.sortPosition);
   event.dataTransfer.effectAllowed = "move";
   row.classList.add("is-dragging");
 });
@@ -1328,16 +1334,34 @@ settingsContent.addEventListener("drop", (event) => {
     !/^\d+$/.test(draggedIndex)
   )
     return;
-  const sourceIndex = Number(draggedIndex);
+  const sourcePosition = Number(draggedIndex);
   event.preventDefault();
-  const targetIndex = Number(target.dataset.sortableSet);
-  if (sourceIndex === targetIndex || !preferences.directorySets[sourceIndex])
+  const targetPosition = Number(target.dataset.sortPosition);
+  const ordered = orderedDirectorySets();
+  const sourceItem = ordered[sourcePosition];
+  const targetItem = ordered[targetPosition];
+  const isPair = (item) => item?.set.type === "pair";
+  if (
+    !sourceItem ||
+    !targetItem ||
+    isPair(sourceItem) !== isPair(targetItem)
+  )
     return;
+  const { single, pair } = groupDirectorySets(ordered);
+  const group = isPair(sourceItem) ? pair : single;
+  const sourceGroupIndex = group.findIndex(
+    (item) => item.index === sourceItem.index,
+  );
+  const targetGroupIndex = group.findIndex(
+    (item) => item.index === targetItem.index,
+  );
+  if (sourceGroupIndex === targetGroupIndex) return;
   let insertIndex =
-    targetIndex + (target.classList.contains("drop-after") ? 1 : 0);
-  const [set] = preferences.directorySets.splice(sourceIndex, 1);
-  if (sourceIndex < insertIndex) insertIndex -= 1;
-  preferences.directorySets.splice(insertIndex, 0, set);
+    targetGroupIndex + (target.classList.contains("drop-after") ? 1 : 0);
+  const [moved] = group.splice(sourceGroupIndex, 1);
+  if (sourceGroupIndex < insertIndex) insertIndex -= 1;
+  group.splice(insertIndex, 0, moved);
+  preferences.directorySets = [...single, ...pair].map(({ set }) => set);
   persistPreferences(preferences);
   renderDirectorySets();
 });

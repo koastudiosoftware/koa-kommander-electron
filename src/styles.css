@@ -1759,6 +1759,19 @@ kbd {
   margin-top: 16px;
   border-top: 1px solid #e2e8f0;
 }
+.directory-set-group h3,
+.directory-set-menu-group-title {
+  margin: 13px 0 5px;
+  padding: 0 0 5px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 650;
+}
+.directory-set-group:first-child h3,
+.directory-set-menu-group-title:first-child {
+  margin-top: 4px;
+}
 .directory-set-row {
   display: flex;
   align-items: center;
@@ -2021,6 +2034,12 @@ kbd {
 }
 .directory-set-menu button:hover {
   background: #f0f6ff;
+}
+.directory-set-menu-group-title {
+  padding-left: 9px;
+  padding-right: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .directory-set-menu strong,
 .directory-set-menu small {
@@ -2728,6 +2747,11 @@ kbd {
 :root[data-theme="dark"] .directory-set-row {
   border-color: #334155;
 }
+:root[data-theme="dark"] .directory-set-group h3,
+:root[data-theme="dark"] .directory-set-menu-group-title {
+  border-color: #334155;
+  color: #94a3b8;
+}
 :root[data-theme="dark"] .conflict-dialog,
 :root[data-theme="dark"] .name-dialog,
 :root[data-theme="dark"] .about-dialog,
@@ -2897,6 +2921,11 @@ kbd {
   :root[data-theme="system"] .settings-category.active {
     background: #1e3a8a66;
     color: #60a5fa;
+  }
+  :root[data-theme="system"] .directory-set-group h3,
+  :root[data-theme="system"] .directory-set-menu-group-title {
+    border-color: #334155;
+    color: #94a3b8;
   }
   :root[data-theme="system"] .settings-close:hover {
     background: #334155;
