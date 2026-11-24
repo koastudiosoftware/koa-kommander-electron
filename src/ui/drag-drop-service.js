@@ -209,7 +209,7 @@ export function handlePointerUp(event) {
       event.clientY,
       drag.side,
     );
-  else toast("Drop on the other panel to choose an action");
+  else toast("Drop inside a panel to choose an action");
 }
 
 export function handlePointerCancel(event) {
