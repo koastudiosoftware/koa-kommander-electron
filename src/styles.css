@@ -1,6 +1,7 @@
 /* Keep the UI self-contained; use Segoe UI on Windows and system fallbacks elsewhere. */
 
 :root {
+  color-scheme: light;
   font-family: "Segoe UI", Arial, sans-serif;
   color: #1e293b;
   background: #f1f5f9;
@@ -2401,6 +2402,23 @@ kbd {
   background: #0f172a;
   color: #f1f5f9;
 }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+:root[data-theme="dark"] * {
+  scrollbar-color: #475569 #1e293b;
+}
+:root[data-theme="dark"] *::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+:root[data-theme="dark"] *::-webkit-scrollbar-thumb {
+  background: #475569;
+  border: 3px solid #1e293b;
+  border-radius: 8px;
+}
+:root[data-theme="dark"] *::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
 :root[data-theme="dark"] .app-header,
 :root[data-theme="dark"] .statusbar {
   background: #1e293b;
@@ -2517,6 +2535,34 @@ kbd {
   background: #1e3a8a50;
   border-color: #3b82f680;
   color: #93c5fd;
+}
+:root[data-theme="dark"] .settings-close:hover {
+  background: #334155;
+  color: #f8fafc;
+}
+:root[data-theme="dark"] .splitter::before {
+  background: #334155;
+}
+:root[data-theme="dark"] .splitter:hover,
+:root[data-theme="dark"] .splitter.is-dragging {
+  background: #0f172a;
+}
+:root[data-theme="dark"] .splitter > .splitter-handle {
+  border-color: #334155;
+  background: #1e293b;
+  box-shadow: 0 1px 2px #02061780;
+}
+:root[data-theme="dark"] .splitter-handle span {
+  background: #64748b;
+}
+:root[data-theme="dark"] .splitter:hover > .splitter-handle,
+:root[data-theme="dark"] .splitter.is-dragging > .splitter-handle {
+  border-color: #3b82f6;
+  background: #1e3a8a;
+}
+:root[data-theme="dark"] .splitter:hover::before,
+:root[data-theme="dark"] .splitter.is-dragging::before {
+  background: #3b82f6;
 }
 :root[data-theme="dark"] .context-menu,
 :root[data-theme="dark"] .context-menu button,
@@ -2739,6 +2785,23 @@ kbd {
 
 /* System dark mode match */
 @media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    color-scheme: dark;
+  }
+  :root[data-theme="system"] * {
+    scrollbar-color: #475569 #1e293b;
+  }
+  :root[data-theme="system"] *::-webkit-scrollbar-track {
+    background: #1e293b;
+  }
+  :root[data-theme="system"] *::-webkit-scrollbar-thumb {
+    background: #475569;
+    border: 3px solid #1e293b;
+    border-radius: 8px;
+  }
+  :root[data-theme="system"] *::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+  }
   :root[data-theme="system"] body {
     background: #0f172a;
     color: #f1f5f9;
@@ -2834,6 +2897,34 @@ kbd {
   :root[data-theme="system"] .settings-category.active {
     background: #1e3a8a66;
     color: #60a5fa;
+  }
+  :root[data-theme="system"] .settings-close:hover {
+    background: #334155;
+    color: #f8fafc;
+  }
+  :root[data-theme="system"] .splitter::before {
+    background: #334155;
+  }
+  :root[data-theme="system"] .splitter:hover,
+  :root[data-theme="system"] .splitter.is-dragging {
+    background: #0f172a;
+  }
+  :root[data-theme="system"] .splitter > .splitter-handle {
+    border-color: #334155;
+    background: #1e293b;
+    box-shadow: 0 1px 2px #02061780;
+  }
+  :root[data-theme="system"] .splitter-handle span {
+    background: #64748b;
+  }
+  :root[data-theme="system"] .splitter:hover > .splitter-handle,
+  :root[data-theme="system"] .splitter.is-dragging > .splitter-handle {
+    border-color: #3b82f6;
+    background: #1e3a8a;
+  }
+  :root[data-theme="system"] .splitter:hover::before,
+  :root[data-theme="system"] .splitter.is-dragging::before {
+    background: #3b82f6;
   }
   :root[data-theme="system"] .context-menu,
   :root[data-theme="system"] .context-menu button,
