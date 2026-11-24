@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 
 contextBridge.exposeInMainWorld("fileManager", {
@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld("fileManager", {
     ipcRenderer.invoke("fs:clear-thumbnail-cache", cachePath),
   diskSpace: (directory) => ipcRenderer.invoke("fs:disk-space", directory),
   transfer: (request) => ipcRenderer.invoke("fs:transfer", request),
+  startNativeFileDrag: (paths) =>
+    ipcRenderer.send("fs:start-native-file-drag", paths),
+  pathForDroppedFile: (file) => webUtils.getPathForFile(file),
   createShortcuts: (request) =>
     ipcRenderer.invoke("fs:create-shortcuts", request),
   createShortcutWizard: (directory) =>

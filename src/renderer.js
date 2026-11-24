@@ -955,31 +955,56 @@ function hideMenu(event) {
 }
 
 async function handleDrop(event, destinationSide, destination) {
-  let payload;
+  let payload = null;
+  let paths = [];
+  let sourceSide = null;
+  let isNativeDrop = false;
   try {
-    payload = JSON.parse(event.dataTransfer.getData("application/x-koa-files"));
+    const appPayload = event.dataTransfer.getData("application/x-koa-files");
+    if (appPayload) payload = JSON.parse(appPayload);
   } catch {
-    return;
+    payload = null;
   }
+  if (payload?.paths?.length) {
+    paths = payload.paths;
+    sourceSide = payload.side;
+  } else {
+    isNativeDrop = true;
+    paths = Array.from(event.dataTransfer.files || [])
+      .map((file) => {
+        try {
+          return window.fileManager.pathForDroppedFile(file);
+        } catch {
+          return "";
+        }
+      })
+      .filter(Boolean);
+    sourceSide = Object.keys(panels).find((side) =>
+      paths.some((filePath) =>
+        panels[side].entries.some((entry) => entry.path === filePath),
+      ),
+    );
+  }
+  if (!paths.length) return;
   const normalizePath = (value) => value.replace(/[\\/]+$/, "").toLocaleLowerCase();
-  const sameFolderDrop = payload.paths.length > 0 && payload.paths.every((source) => {
+  const sameFolderDrop = paths.every((source) => {
     const separator = Math.max(source.lastIndexOf("/"), source.lastIndexOf("\\"));
     const sourceParent = separator < 0 ? "" : source.slice(0, separator);
     return normalizePath(sourceParent) === normalizePath(destination);
   });
-  if (sameFolderDrop) {
+  if (isNativeDrop || sameFolderDrop) {
     openDropActionMenu(
-      payload.paths,
+      paths,
       { side: destinationSide, path: destination },
       event.clientX,
       event.clientY,
-      payload.side,
+      sourceSide,
     );
     return;
   }
   const operation = event.ctrlKey ? "copy" : "move";
   const result = await transferWithConflicts({
-    sources: payload.paths,
+    sources: paths,
     destination,
     operation,
   });

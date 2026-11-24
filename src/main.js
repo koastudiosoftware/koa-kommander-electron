@@ -647,6 +647,24 @@ ipcMain.handle('fs:disk-space', async (_event, directory) => {
   return { total, free, used: Math.max(0, total - free) };
 });
 
+ipcMain.on('fs:start-native-file-drag', (event, requestedPaths) => {
+  if (!Array.isArray(requestedPaths)) return;
+  const files = [...new Set(requestedPaths)].filter(
+    (filePath) =>
+      typeof filePath === 'string' &&
+      path.isAbsolute(filePath) &&
+      fsSync.existsSync(filePath),
+  );
+  if (!files.length) return;
+  const dragIcon = nativeImage
+    .createFromPath(path.join(__dirname, 'assets', 'koa-kommander-icon.png'))
+    .resize({ width: 32, height: 32 });
+  event.sender.startDrag({
+    files,
+    icon: dragIcon,
+  });
+});
+
 ipcMain.handle('fs:transfer', async (_event, { sources, destination, operation, conflictAction, renameTo }) => {
   const targetDirectory = resolvePath(destination);
   const results = [];

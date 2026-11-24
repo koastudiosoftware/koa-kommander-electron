@@ -458,11 +458,8 @@ export function bindPanel(
         panel.selected.add(entry.path);
       }
       const paths = getSelected(side).map((item) => item.path);
-      event.dataTransfer.setData(
-        "application/x-koa-files",
-        JSON.stringify({ side, paths }),
-      );
-      event.dataTransfer.effectAllowed = "copyMove";
+      event.preventDefault();
+      window.fileManager.startNativeFileDrag(paths);
       setTimeout(() => refreshSelection(getActiveSideFn()), 0);
     });
 
