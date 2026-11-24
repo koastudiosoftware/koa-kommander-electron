@@ -703,6 +703,13 @@ kbd {
   background: #e2e8f0;
   color: #0f172a;
 }
+.context-top-button:disabled,
+.context-top-button:disabled:hover {
+  opacity: 0.42;
+  background: transparent;
+  color: #334155;
+  cursor: default;
+}
 .context-top-button img.svg-icon {
   width: 21px;
   height: 21px;
@@ -2563,6 +2570,13 @@ kbd {
 :root[data-theme="dark"] .context-top-button:hover {
   background: #334155;
   color: #ffffff;
+}
+:root[data-theme="dark"] .context-top-button:disabled,
+:root[data-theme="dark"] .context-top-button:disabled:hover {
+  background: transparent;
+  color: #94a3b8;
+  opacity: 0.42;
+  cursor: default;
 }
 :root[data-theme="dark"] .context-top-button img.svg-icon {
   filter: invert(100%) sepia(38%) saturate(274%) hue-rotate(175deg) brightness(100%) contrast(92%);

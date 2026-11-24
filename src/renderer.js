@@ -108,6 +108,18 @@ const panels = {
 let layoutInitialized = false;
 let clipboard = null;
 
+function updatePasteControls() {
+  const canPaste = Boolean(clipboard?.paths?.length);
+  document
+    .querySelectorAll(
+      '[data-action="paste"], [data-top-action="paste"], [data-background-action="paste"]',
+    )
+    .forEach((button) => {
+      button.disabled = !canPaste;
+      button.setAttribute("aria-disabled", String(!canPaste));
+    });
+}
+
 // ============================================================================
 // 2. PREFERENCES & CONFIGURATION STATE
 // ============================================================================
@@ -213,6 +225,7 @@ initClipboardService({
   getClipboard: () => clipboard,
   setClipboard: (val) => {
     clipboard = val;
+    updatePasteControls();
   },
   navigate,
   askTransferConflict,
@@ -753,6 +766,7 @@ function showContextMenu(x, y, side, entry) {
 
   menu.innerHTML = topRowHtml + mainHtml;
   menu.hidden = false;
+  updatePasteControls();
   menu.style.left = `${Math.min(x, innerWidth - 230)}px`;
   menu.style.top = `${Math.min(y, innerHeight - 280)}px`;
 
@@ -763,6 +777,7 @@ function showContextMenu(x, y, side, entry) {
       const actionKey = button.dataset.topAction;
       if (actionKey === "cut") copySelection(side, true);
       else if (actionKey === "copy") copySelection(side, false);
+      else if (actionKey === "paste") pasteSelection(side);
       else if (actionKey === "rename") renameSelection(side);
       else if (actionKey === "delete") deleteSelection(side);
     });
@@ -784,6 +799,7 @@ function showBackgroundContextMenu(x, y, side) {
   menu.innerHTML =
     `<div class="context-menu-top-row"><button role="menuitem" class="context-top-button" data-background-action="paste" title="Paste">${actionIcon("paste")}<span>Paste</span></button></div><div class="menu-separator"></div><div class="context-menu-item context-submenu-parent"><button role="menuitem" data-open-new-submenu aria-haspopup="true" aria-expanded="false">New<span aria-hidden="true">›</span></button><div class="context-submenu" hidden><button role="menuitem" data-background-action="folder">Folder</button><button role="menuitem" data-background-action="shortcut">Shortcut</button></div></div><div class="menu-separator"></div><button role="menuitem" data-background-action="properties">Properties</button><button role="menuitem" data-background-action="explorer">Open in File Explorer</button>`;
   menu.hidden = false;
+  updatePasteControls();
   const menuWidth = menu.offsetWidth;
   const menuHeight = menu.offsetHeight;
   menu.style.left = `${Math.max(8, Math.min(x, innerWidth - menuWidth - 8))}px`;
