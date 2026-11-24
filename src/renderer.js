@@ -60,6 +60,8 @@ import {
   directorySetLabel,
   directorySetDetails,
   renderDirectorySets,
+  getDirectorySetDraft,
+  setDirectorySetDraft,
   switchCategory,
 } from "./ui/settings-service.js";
 
@@ -172,7 +174,6 @@ const nameDialogInput = document.querySelector("#name-dialog-input");
 const aboutBackdrop = document.querySelector("#about-backdrop");
 const propertiesBackdrop = document.querySelector("#properties-backdrop");
 let defaultThumbnailCachePath = "";
-let directorySetDraft = null;
 let activeFolderSizeRequest = null;
 let rightDragCandidate = null;
 
@@ -399,7 +400,7 @@ window.addEventListener("storage", (event) => {
         applyThumbnailSize,
       );
     }
-    if (!settingsBackdrop.hidden && !directorySetDraft)
+    if (!settingsBackdrop.hidden && !getDirectorySetDraft())
       renderSettingsCategory();
   } catch {
     /* Keep the current window usable if another instance writes malformed settings. */
@@ -1077,13 +1078,14 @@ document.querySelectorAll(".settings-category").forEach((button) =>
 
 settingsContent.addEventListener("change", (event) => {
   const setField = event.target.closest("[data-set-field]");
-  if (setField && directorySetDraft) {
-    directorySetDraft[setField.dataset.setField] = setField.value;
+  const draft = getDirectorySetDraft();
+  if (setField && draft) {
+    draft[setField.dataset.setField] = setField.value;
     if (setField.dataset.setField === "type") {
       if (setField.value === "pair") {
-        directorySetDraft.leftPath ||= panels.left.path || "";
-        directorySetDraft.rightPath ||= panels.right.path || "";
-      } else directorySetDraft.path ||= panels[activeSide].path || "";
+        draft.leftPath ||= panels.left.path || "";
+        draft.rightPath ||= panels.right.path || "";
+      } else draft.path ||= panels[activeSide].path || "";
       renderDirectorySets();
     }
     return;
@@ -1167,8 +1169,9 @@ settingsContent.addEventListener("drop", (event) => {
 
 settingsContent.addEventListener("input", (event) => {
   const field = event.target.closest("[data-set-field]");
-  if (field && directorySetDraft && field.dataset.setField !== "type") {
-    directorySetDraft[field.dataset.setField] = field.value;
+  const draft = getDirectorySetDraft();
+  if (field && draft && field.dataset.setField !== "type") {
+    draft[field.dataset.setField] = field.value;
   }
 });
 
@@ -1216,30 +1219,31 @@ settingsContent.addEventListener("click", async (event) => {
     return;
   }
   if (event.target.closest("[data-new-set]")) {
-    directorySetDraft = {
+    setDirectorySetDraft({
       index: null,
       type: "single",
       path: panels[activeSide].path || "",
       openIn: "active",
       name: "",
-    };
+    });
     renderDirectorySets();
     return;
   }
   const usePanel = event.target.closest("[data-use-panel]");
-  if (usePanel && directorySetDraft) {
+  const draft = getDirectorySetDraft();
+  if (usePanel && draft) {
     const side = usePanel.dataset.usePanel;
-    const field = directorySetDraft.type === "pair" ? `${side}Path` : "path";
-    directorySetDraft[field] = panels[side].path || "";
+    const field = draft.type === "pair" ? `${side}Path` : "path";
+    draft[field] = panels[side].path || "";
     renderDirectorySets();
     return;
   }
   const browse = event.target.closest("[data-browse-field]");
-  if (browse && directorySetDraft) {
+  if (browse && draft) {
     try {
       const directory = await window.fileManager.chooseDirectory();
       if (directory) {
-        directorySetDraft[browse.dataset.browseField] = directory;
+        draft[browse.dataset.browseField] = directory;
         renderDirectorySets();
       }
     } catch (error) {
@@ -1248,36 +1252,36 @@ settingsContent.addEventListener("click", async (event) => {
     return;
   }
   if (event.target.closest("[data-cancel-set]")) {
-    directorySetDraft = null;
+    setDirectorySetDraft(null);
     renderDirectorySets();
     return;
   }
   if (event.target.closest("[data-save-set]")) {
-    const draft = directorySetDraft;
+    const saveDraft = getDirectorySetDraft();
     const requiredPaths =
-      draft.type === "pair" ? [draft.leftPath, draft.rightPath] : [draft.path];
+      saveDraft.type === "pair" ? [saveDraft.leftPath, saveDraft.rightPath] : [saveDraft.path];
     if (requiredPaths.some((directory) => !directory?.trim())) {
       toast("Enter a directory for each panel");
       return;
     }
     const record =
-      draft.type === "pair"
+      saveDraft.type === "pair"
         ? {
             type: "pair",
-            leftPath: draft.leftPath.trim(),
-            rightPath: draft.rightPath.trim(),
-            name: (draft.name || "").trim(),
+            leftPath: saveDraft.leftPath.trim(),
+            rightPath: saveDraft.rightPath.trim(),
+            name: (saveDraft.name || "").trim(),
           }
         : {
             type: "single",
-            path: draft.path.trim(),
-            openIn: draft.openIn || "active",
-            name: (draft.name || "").trim(),
+            path: saveDraft.path.trim(),
+            openIn: saveDraft.openIn || "active",
+            name: (saveDraft.name || "").trim(),
           };
-    if (draft.index === null) preferences.directorySets.push(record);
-    else preferences.directorySets[draft.index] = record;
+    if (saveDraft.index === null) preferences.directorySets.push(record);
+    else preferences.directorySets[saveDraft.index] = record;
     persistPreferences(preferences);
-    directorySetDraft = null;
+    setDirectorySetDraft(null);
     renderDirectorySets();
     return;
   }
@@ -1290,10 +1294,10 @@ settingsContent.addEventListener("click", async (event) => {
   }
   const edit = event.target.closest("[data-edit-set]");
   if (edit) {
-    directorySetDraft = {
+    setDirectorySetDraft({
       ...preferences.directorySets[Number(edit.dataset.editSet)],
       index: Number(edit.dataset.editSet),
-    };
+    });
     renderDirectorySets();
     return;
   }

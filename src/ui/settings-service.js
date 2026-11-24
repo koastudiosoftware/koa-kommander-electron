@@ -212,6 +212,14 @@ export function renderDirectorySets() {
   settingsContent.innerHTML = `<h2>Directory Sets</h2><p class="settings-description">Save a single location or a left/right pair, then open it in your preferred panel arrangement.</p><label class="setting-field directory-set-sort-field"><span>Sort directory sets</span><select data-preference="directorySetSort"><option value="manual" ${prefs.directorySetSort === "manual" ? "selected" : ""}>Manual (drag to reorder)</option><option value="alphabetical" ${prefs.directorySetSort === "alphabetical" ? "selected" : ""}>Alphabetically by title</option></select></label><button class="settings-primary" data-new-set>New directory set</button><div class="directory-set-list">${items || '<p class="settings-empty">No directory sets yet.</p>'}</div>`;
 }
 
+export function getDirectorySetDraft() {
+  return directorySetDraft;
+}
+
+export function setDirectorySetDraft(draft) {
+  directorySetDraft = draft;
+}
+
 /**
  * Renders the settings category currently selected in the settings overlay.
  */
