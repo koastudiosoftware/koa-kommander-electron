@@ -227,8 +227,16 @@ export function bindPanel(
     ?.addEventListener("click", () => navigate(side, undefined));
 
   panelEl.querySelector(".pathbar")?.addEventListener("click", (event) => {
-    if (event.target === event.currentTarget)
+    const crumb = event.target.closest("[data-crumb]");
+    if (crumb) {
+      const part = pathParts(panel.path)[Number(crumb.dataset.crumb)];
+      if (part) {
+        setActiveSideFn(side);
+        navigate(side, part.path);
+      }
+    } else if (event.target === event.currentTarget) {
       editPanelPath(side, getActiveSideFn());
+    }
   });
 
   panelEl
@@ -289,13 +297,6 @@ export function bindPanel(
     );
     applyThumbnailSize(panel);
   });
-
-  panelEl.querySelectorAll("[data-crumb]").forEach((crumb) =>
-    crumb.addEventListener("click", () => {
-      const part = pathParts(panel.path)[Number(crumb.dataset.crumb)];
-      if (part) navigate(side, part.path);
-    }),
-  );
 
   panelEl.querySelectorAll("[data-sort]").forEach((heading) =>
     heading.addEventListener("click", () => {
