@@ -103,6 +103,30 @@ function isRootPath(path) {
   return /^[a-zA-Z]:[\/\\]?$/.test(path) || path === "/" || path === "\\";
 }
 
+function compareEntries(panel, a, b) {
+  if (panel.sortBy === "size") return (a.size || 0) - (b.size || 0);
+  if (panel.sortBy === "modified")
+    return (
+      new Date(a.modified || 0).getTime() -
+      new Date(b.modified || 0).getTime()
+    );
+  if (panel.sortBy === "type") {
+    const typeOf = (entry) => {
+      if (entry.isDirectory) return "";
+      const extension = entry.name.split(".").at(-1);
+      return entry.name.includes(".") ? extension.toLocaleLowerCase() : "";
+    };
+    return typeOf(a).localeCompare(typeOf(b), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+  }
+  return a.name.localeCompare(b.name, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
 /**
  * Renders the entries for the specified side.
  * @param {string} side - The side of the panel to render entries for.
@@ -119,21 +143,9 @@ function renderEntries(side, panels, preferences) {
       (entry) => preferences.showHidden || !entry.name.startsWith("."),
     );
     const sortedEntries = [...visibleEntries].sort((a, b) => {
-      let comparison = 0;
       if (preferences.groupFolders && a.isDirectory !== b.isDirectory)
         return a.isDirectory ? -1 : 1;
-      if (panel.sortBy === "name")
-        comparison = a.name.localeCompare(b.name, undefined, {
-          numeric: true,
-          sensitivity: "base",
-        });
-      else if (panel.sortBy === "size")
-        comparison = (a.size || 0) - (b.size || 0);
-      else
-        comparison =
-          new Date(a.modified || 0).getTime() -
-          new Date(b.modified || 0).getTime();
-      return comparison * (panel.sortDirection === "asc" ? 1 : -1);
+      return compareEntries(panel, a, b) * (panel.sortDirection === "asc" ? 1 : -1);
     });
 
     const rows = sortedEntries
@@ -163,10 +175,7 @@ function renderEntries(side, panels, preferences) {
   const orderedEntries = [...visibleEntries].sort((a, b) => {
     if (preferences.groupFolders && a.isDirectory !== b.isDirectory)
       return a.isDirectory ? -1 : 1;
-    return a.name.localeCompare(b.name, undefined, {
-      numeric: true,
-      sensitivity: "base",
-    });
+    return compareEntries(panel, a, b) * (panel.sortDirection === "asc" ? 1 : -1);
   });
 
   const parentTile = `<div class="icon-tile special-tile ${atRoot ? "disabled" : ""}" data-special-entry="up" style="width:${tileSize}px;height:${tileSize}px"><div class="tile-visual folder" style="width:${panel.iconSize}px;height:${panel.iconSize}px">${icon("folder")}</div><div class="tile-name">..</div></div>`;

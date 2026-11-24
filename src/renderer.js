@@ -809,37 +809,106 @@ function showContextMenu(x, y, side, entry) {
 }
 
 function showBackgroundContextMenu(x, y, side) {
-  menu.innerHTML =
-    `<div class="context-menu-top-row"><button role="menuitem" class="context-top-button" data-background-action="paste" title="Paste">${actionIcon("paste")}<span>Paste</span></button></div><div class="menu-separator"></div><div class="context-menu-item context-submenu-parent"><button role="menuitem" data-open-new-submenu aria-haspopup="true" aria-expanded="false">New<span aria-hidden="true">›</span></button><div class="context-submenu" hidden><button role="menuitem" data-background-action="folder">Folder</button><button role="menuitem" data-background-action="shortcut">Shortcut</button></div></div><div class="menu-separator"></div><button role="menuitem" data-background-action="properties">Properties</button><button role="menuitem" data-background-action="explorer">Open in File Explorer</button>`;
+  const panel = panels[side];
+  const option = (label, attributes, selected) =>
+    `<button role="menuitemradio" aria-checked="${selected}" ${attributes}>${label}<span class="context-choice-indicator">${selected ? "●" : ""}</span></button>`;
+  menu.innerHTML = `
+    <div class="context-menu-top-row"><button role="menuitem" class="context-top-button" data-background-action="paste" title="Paste">${actionIcon("paste")}<span>Paste</span></button></div>
+    <div class="menu-separator"></div>
+    <div class="context-menu-item context-submenu-parent">
+      <button role="menuitem" data-submenu-trigger aria-haspopup="true" aria-expanded="false">View<span aria-hidden="true">›</span></button>
+      <div class="context-submenu" hidden>
+        ${option("Extra Large Icons", 'data-view-preset="160"', panel.view === "icons" && panel.iconSize === 160)}
+        ${option("Large Icons", 'data-view-preset="128"', panel.view === "icons" && panel.iconSize === 128)}
+        ${option("Medium Icons", 'data-view-preset="96"', panel.view === "icons" && panel.iconSize === 96)}
+        ${option("Small Icons", 'data-view-preset="64"', panel.view === "icons" && panel.iconSize === 64)}
+        ${option("Details", 'data-view-preset="details"', panel.view === "details")}
+      </div>
+    </div>
+    <div class="context-menu-item context-submenu-parent">
+      <button role="menuitem" data-submenu-trigger aria-haspopup="true" aria-expanded="false">Sort<span aria-hidden="true">›</span></button>
+      <div class="context-submenu" hidden>
+        ${option("Name", 'data-sort-by="name"', panel.sortBy === "name")}
+        ${option("Date modified", 'data-sort-by="modified"', panel.sortBy === "modified")}
+        ${option("Type", 'data-sort-by="type"', panel.sortBy === "type")}
+        ${option("Size", 'data-sort-by="size"', panel.sortBy === "size")}
+        <div class="menu-separator"></div>
+        ${option("Ascending", 'data-sort-direction="asc"', panel.sortDirection === "asc")}
+        ${option("Descending", 'data-sort-direction="desc"', panel.sortDirection === "desc")}
+      </div>
+    </div>
+    <div class="menu-separator"></div>
+    <div class="context-menu-item context-submenu-parent">
+      <button role="menuitem" data-submenu-trigger aria-haspopup="true" aria-expanded="false">New<span aria-hidden="true">›</span></button>
+      <div class="context-submenu" hidden><button role="menuitem" data-background-action="folder">Folder</button><button role="menuitem" data-background-action="shortcut">Shortcut</button></div>
+    </div>
+    <div class="menu-separator"></div>
+    <button role="menuitem" data-background-action="properties">Properties</button><button role="menuitem" data-background-action="explorer">Open in File Explorer</button>`;
   menu.hidden = false;
   updatePasteControls();
   const menuWidth = menu.offsetWidth;
   const menuHeight = menu.offsetHeight;
   menu.style.left = `${Math.max(8, Math.min(x, innerWidth - menuWidth - 8))}px`;
   menu.style.top = `${Math.max(8, Math.min(y, innerHeight - menuHeight - 8))}px`;
-  const submenuParent = menu.querySelector(".context-submenu-parent");
-  const submenuButton = menu.querySelector("[data-open-new-submenu]");
-  const submenu = menu.querySelector(".context-submenu");
-  const showSubmenu = () => {
-    submenu.hidden = false;
-    submenuButton.setAttribute("aria-expanded", "true");
-    const rect = menu.getBoundingClientRect();
-    submenuParent.classList.toggle("opens-left", rect.right + 180 > innerWidth);
-  };
-  const hideSubmenu = () => {
-    submenu.hidden = true;
-    submenuButton.setAttribute("aria-expanded", "false");
-  };
-  submenuParent.addEventListener("mouseenter", showSubmenu);
-  submenuParent.addEventListener("mouseleave", hideSubmenu);
-  submenuButton.addEventListener("focus", showSubmenu);
-  submenuButton.addEventListener("click", showSubmenu);
+  menu.querySelectorAll(".context-submenu-parent").forEach((submenuParent) => {
+    const submenuButton = submenuParent.querySelector("[data-submenu-trigger]");
+    const submenu = submenuParent.querySelector(".context-submenu");
+    const showSubmenu = () => {
+      submenu.hidden = false;
+      submenuButton.setAttribute("aria-expanded", "true");
+      const rect = menu.getBoundingClientRect();
+      submenuParent.classList.toggle("opens-left", rect.right + 190 > innerWidth);
+    };
+    const hideSubmenu = () => {
+      submenu.hidden = true;
+      submenuButton.setAttribute("aria-expanded", "false");
+    };
+    submenuParent.addEventListener("mouseenter", showSubmenu);
+    submenuParent.addEventListener("mouseleave", hideSubmenu);
+    submenuButton.addEventListener("focus", showSubmenu);
+    submenuButton.addEventListener("click", showSubmenu);
+  });
   const dismissBackgroundMenu = (event) => {
     if (menu.contains(event.target)) return;
     menu.hidden = true;
     document.removeEventListener("mousedown", dismissBackgroundMenu);
   };
   document.addEventListener("mousedown", dismissBackgroundMenu);
+
+  const applyPanelMenuChange = () => {
+    activeSide = side;
+    renderPanel(side, panels, activeSide, detectedDrives, preferences);
+    bindPanel(side, () => activeSide, (nextSide) => { activeSide = nextSide; }, applyThumbnailSize);
+    updateToolbarState(panels, activeSide);
+    persistLayout(panels, layoutInitialized);
+    menu.hidden = true;
+    document.removeEventListener("mousedown", dismissBackgroundMenu);
+  };
+
+  menu.querySelectorAll("[data-view-preset]").forEach((button) =>
+    button.addEventListener("click", () => {
+      const preset = button.dataset.viewPreset;
+      if (preset === "details") panel.view = "details";
+      else {
+        panel.view = "icons";
+        panel.iconSize = Number(preset);
+      }
+      applyPanelMenuChange();
+    }),
+  );
+  menu.querySelectorAll("[data-sort-by]").forEach((button) =>
+    button.addEventListener("click", () => {
+      panel.sortBy = button.dataset.sortBy;
+      applyPanelMenuChange();
+    }),
+  );
+  menu.querySelectorAll("[data-sort-direction]").forEach((button) =>
+    button.addEventListener("click", () => {
+      panel.sortDirection = button.dataset.sortDirection;
+      applyPanelMenuChange();
+    }),
+  );
+
   menu.querySelectorAll("[data-background-action]").forEach((button) =>
     button.addEventListener("click", async () => {
       const action = button.dataset.backgroundAction;
