@@ -49,6 +49,16 @@ body {
   flex-direction: column;
   overflow: hidden;
   background: #f1f5f9;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"],
+[contenteditable=""] {
+  user-select: text;
+  -webkit-user-select: text;
 }
 .app-header {
   height: 64px;
