@@ -253,6 +253,18 @@ export function askTransferConflict(conflict) {
       : bothFolders
         ? "Merge folders · matching files are replaced"
         : null;
+    const applyAllLabel = conflictBackdrop.querySelector(
+      "#conflict-apply-all-label",
+    );
+    const applyAllCheckbox = conflictBackdrop.querySelector(
+      "#conflict-apply-all",
+    );
+    applyAllCheckbox.checked = false;
+    applyAllLabel.textContent = bothFiles
+      ? "Apply this choice to all file conflicts in this operation"
+      : bothFolders
+        ? "Apply this choice to all folder conflicts in this operation"
+        : "Apply this choice to all file/folder conflicts in this operation";
     conflictItems.innerHTML = `${conflictObjectCard("New item", incoming, newChoice, newAction, Boolean(newChoice))}${conflictObjectCard("Old item", existing, "skip", "Keep the existing item")}`;
     conflictActions.innerHTML =
       '<button class="conflict-choice" data-conflict-choice="rename">Rename incoming item</button><button class="conflict-choice cancel" data-conflict-choice="cancel">Cancel operation</button>';

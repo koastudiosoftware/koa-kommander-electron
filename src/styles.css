@@ -1444,6 +1444,20 @@ kbd {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
+.conflict-apply-all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  color: #475569;
+  font-size: 11px;
+  cursor: pointer;
+}
+.conflict-apply-all input {
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: #2563eb;
+}
 .conflict-object-choice {
   min-width: 0;
   width: 100%;
@@ -2689,6 +2703,7 @@ kbd {
 :root[data-theme="dark"] .conflict-object-name strong,
 :root[data-theme="dark"] .conflict-object-choice dd,
 :root[data-theme="dark"] .conflict-object-action,
+:root[data-theme="dark"] .conflict-apply-all,
 :root[data-theme="dark"] .properties-list dd,
 :root[data-theme="dark"] .name-dialog label {
   color: #f1f5f9;

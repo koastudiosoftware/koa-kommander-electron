@@ -176,6 +176,7 @@ const dropActionMenu = document.querySelector("#drop-action-menu");
 const conflictBackdrop = document.querySelector("#conflict-backdrop");
 const conflictItems = document.querySelector("#conflict-items");
 const conflictActions = document.querySelector("#conflict-actions");
+const conflictApplyAll = document.querySelector("#conflict-apply-all");
 const conflictRename = document.querySelector("#conflict-rename");
 const conflictRenameInput = document.querySelector("#conflict-rename-name");
 const settingsBackdrop = document.querySelector("#settings-backdrop");
@@ -480,7 +481,8 @@ window.fileManager.onFolderSizeProgress((progress) => {
 conflictItems.addEventListener("click", (event) => {
   const choice = event.target.closest("[data-conflict-choice]")?.dataset
     .conflictChoice;
-  if (choice) finishConflictDecision({ choice });
+  if (choice)
+    finishConflictDecision({ choice, applyToAll: conflictApplyAll.checked });
 });
 
 conflictActions.addEventListener("click", (event) => {
@@ -493,7 +495,7 @@ conflictActions.addEventListener("click", (event) => {
     conflictRenameInput.select();
     return;
   }
-  finishConflictDecision({ choice });
+  finishConflictDecision({ choice, applyToAll: conflictApplyAll.checked });
 });
 
 document

@@ -61,6 +61,7 @@
     <section class="conflict-dialog" role="dialog" aria-modal="true" aria-labelledby="conflict-title">
       <header class="conflict-header"><div><h2 id="conflict-title">An item with this name already exists</h2><p>Choose what to do with the incoming item.</p></div></header>
       <div class="conflict-items" id="conflict-items"></div>
+      <label class="conflict-apply-all" id="conflict-apply-all-row"><input id="conflict-apply-all" type="checkbox"><span id="conflict-apply-all-label">Apply this choice to all matching conflicts in this operation</span></label>
       <div class="conflict-rename" id="conflict-rename" hidden><label for="conflict-rename-name">New name for incoming item</label><div><input id="conflict-rename-name"><button class="conflict-choice primary" data-conflict-confirm-rename>Use this name</button></div></div>
       <footer class="conflict-actions" id="conflict-actions"></footer>
     </section>

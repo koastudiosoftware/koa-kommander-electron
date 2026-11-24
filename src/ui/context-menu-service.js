@@ -171,6 +171,7 @@ export async function transferWithConflicts({
   operation,
 }) {
   const results = [];
+  const applyToAllChoices = new Map();
   for (const source of sources) {
     let [result] = await window.fileManager.transfer({
       sources: [source],
@@ -178,7 +179,24 @@ export async function transferWithConflicts({
       operation,
     });
     while (result?.conflict) {
-      const decision = await askTransferConflict(result);
+      const incoming = result.sourceInfo;
+      const existing = result.targetInfo;
+      const conflictKind =
+        !incoming.isDirectory && !existing.isDirectory
+          ? "files"
+          : incoming.isDirectory && existing.isDirectory
+            ? "folders"
+            : "file-folder conflicts";
+      const rememberedChoice = applyToAllChoices.get(conflictKind);
+      const decision = rememberedChoice
+        ? { choice: rememberedChoice }
+        : await askTransferConflict(result);
+      if (
+        decision.applyToAll &&
+        ["overwrite", "merge", "skip"].includes(decision.choice)
+      ) {
+        applyToAllChoices.set(conflictKind, decision.choice);
+      }
       if (decision.choice === "cancel") {
         results.push({ source, ok: false, cancelled: true });
         return results;
