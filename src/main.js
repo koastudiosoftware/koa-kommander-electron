@@ -61,6 +61,31 @@ function resolvePath(value) {
   return path.resolve(expandEnvironmentVariables(value));
 }
 
+function pathsEqual(first, second) {
+  const normalizedFirst = path.resolve(first);
+  const normalizedSecond = path.resolve(second);
+  return process.platform === 'win32'
+    ? normalizedFirst.toLowerCase() === normalizedSecond.toLowerCase()
+    : normalizedFirst === normalizedSecond;
+}
+
+async function availableCopyName(source, destination, isDirectory) {
+  const originalName = path.basename(source);
+  const extension = isDirectory ? '' : path.extname(originalName);
+  const stem = originalName.slice(0, originalName.length - extension.length);
+  for (let index = 1; ; index += 1) {
+    const name = index === 1
+      ? `Copy of ${originalName}`
+      : `Copy of ${stem} (${index})${extension}`;
+    try {
+      await fs.lstat(path.join(destination, name));
+    } catch (error) {
+      if (error.code === 'ENOENT') return name;
+      throw error;
+    }
+  }
+}
+
 /**
  * Runs a PowerShell script.
  * @param {*} script The PowerShell script to run.
@@ -633,7 +658,8 @@ ipcMain.handle('fs:transfer', async (_event, { sources, destination, operation, 
     }
     try {
       const sourceStats = await fs.stat(source);
-      if (source === path.join(targetDirectory, path.basename(source))) {
+      const sameDirectory = pathsEqual(path.dirname(source), targetDirectory);
+      if (!sameDirectory && pathsEqual(source, path.join(targetDirectory, path.basename(source)))) {
         results.push({ source, ok: false, error: 'Source and destination are the same.' });
         continue;
       }
@@ -643,9 +669,11 @@ ipcMain.handle('fs:transfer', async (_event, { sources, destination, operation, 
         if (!targetName || targetName === '.' || targetName === '..' || path.basename(targetName) !== targetName) {
           throw new Error('Enter a valid name for the incoming item.');
         }
+      } else if (operation === 'copy' && sameDirectory) {
+        targetName = await availableCopyName(source, targetDirectory, sourceStats.isDirectory());
       }
       const target = path.join(targetDirectory, targetName);
-      if (source === target) {
+      if (pathsEqual(source, target)) {
         results.push({ source, ok: false, error: 'Source and destination are the same.' });
         continue;
       }
