@@ -135,6 +135,7 @@ const defaultPreferences = {
   theme: "system",
   directorySets: [],
   directorySetSort: "manual",
+  directoryViewStates: {},
   thumbnailCachePath: "",
 };
 let preferences;
@@ -158,7 +159,48 @@ if (!Array.isArray(savedPreferences.directorySets))
     }),
   );
 
+if (
+  !preferences.directoryViewStates ||
+  typeof preferences.directoryViewStates !== "object" ||
+  Array.isArray(preferences.directoryViewStates)
+)
+  preferences.directoryViewStates = {};
+
 delete preferences.bookmarks;
+
+function directoryViewKey(directory) {
+  if (typeof directory !== "string" || !directory) return "";
+  let key = directory.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (!key && directory.startsWith("/")) key = "/";
+  if (/^[a-z]:\//i.test(key) || key.startsWith("//"))
+    key = key.toLocaleLowerCase();
+  return key;
+}
+
+function saveDirectoryViewState(directory, panel) {
+  const key = directoryViewKey(directory);
+  if (!key) return;
+  preferences.directoryViewStates[key] = {
+    view: panel.view === "icons" ? "icons" : "details",
+    iconSize: Number.isFinite(panel.iconSize)
+      ? Math.max(32, Math.min(160, panel.iconSize))
+      : 48,
+  };
+  persistPreferences(preferences);
+}
+
+function restoreDirectoryViewState(directory, panel) {
+  const state = preferences.directoryViewStates[directoryViewKey(directory)];
+  if (state && (state.view === "icons" || state.view === "details")) {
+    panel.view = state.view;
+    panel.iconSize = Number.isFinite(state.iconSize)
+      ? Math.max(32, Math.min(160, 32 + Math.round((state.iconSize - 32) / 8) * 8))
+      : 48;
+  } else {
+    panel.view = "details";
+    panel.iconSize = 48;
+  }
+}
 
 // ============================================================================
 // 3. UI ELEMENT REFERENCES & GLOBAL MODAL STATE
@@ -321,6 +363,8 @@ initPanelInteractionService({
   getRightDragCandidate,
   getSuppressRightContextUntil,
   handleDrop,
+  onDirectoryViewChange: (side) =>
+    saveDirectoryViewState(panels[side].path, panels[side]),
   onOpenDirectorySets: (side, event) => {
     directorySetMenuSide = side;
 
@@ -402,6 +446,12 @@ window.addEventListener("storage", (event) => {
     preferences = { ...defaultPreferences, ...savedPreferences };
     if (typeof preferences.thumbnailCachePath !== "string")
       preferences.thumbnailCachePath = "";
+    if (
+      !preferences.directoryViewStates ||
+      typeof preferences.directoryViewStates !== "object" ||
+      Array.isArray(preferences.directoryViewStates)
+    )
+      preferences.directoryViewStates = {};
     if (!["manual", "alphabetical"].includes(preferences.directorySetSort))
       preferences.directorySetSort = "manual";
     if (!Array.isArray(savedPreferences.directorySets)) {
@@ -417,6 +467,8 @@ window.addEventListener("storage", (event) => {
     delete preferences.bookmarks;
     document.documentElement.dataset.theme = preferences.theme;
     if (layoutInitialized) {
+      restoreDirectoryViewState(panels.left.path, panels.left);
+      restoreDirectoryViewState(panels.right.path, panels.right);
       renderPanel("left", panels, activeSide, detectedDrives, preferences);
       bindPanel(
         "left",
@@ -539,6 +591,7 @@ async function navigate(
   { historyMode = "push", historyIndex = -1, suppressToast = false } = {},
 ) {
   const panel = panels[side];
+  if (panel.path) saveDirectoryViewState(panel.path, panel);
   panel.thumbnailGeneration += 1;
   if (panel.searchId) window.fileManager.cancelSearch(panel.searchId);
   panel.searchId = null;
@@ -547,6 +600,7 @@ async function navigate(
   try {
     const result = await window.fileManager.list(directory);
     panel.path = result.path;
+    restoreDirectoryViewState(panel.path, panel);
     panel.entries = result.entries;
     if (panel.watchPath !== result.path) {
       const watchedPath = result.path;
@@ -891,6 +945,7 @@ function showBackgroundContextMenu(x, y, side) {
 
   const applyPanelMenuChange = () => {
     activeSide = side;
+    saveDirectoryViewState(panel.path, panel);
     renderPanel(side, panels, activeSide, detectedDrives, preferences);
     bindPanel(side, () => activeSide, (nextSide) => { activeSide = nextSide; }, applyThumbnailSize);
     updateToolbarState(panels, activeSide);
@@ -1610,6 +1665,8 @@ let panelRatio = Number.isFinite(savedLayout.panelRatio)
 
 setPanelRatio(panelRatio);
 
-window.addEventListener("beforeunload", () =>
-  persistLayout(panels, layoutInitialized),
-);
+window.addEventListener("beforeunload", () => {
+  saveDirectoryViewState(panels.left.path, panels.left);
+  saveDirectoryViewState(panels.right.path, panels.right);
+  persistLayout(panels, layoutInitialized);
+});

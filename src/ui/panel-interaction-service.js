@@ -26,6 +26,7 @@ let panels,
   getSuppressRightContextUntil,
   handleDrop,
   onOpenDirectorySets;
+let onDirectoryViewChange;
 
 /**
  * Initializes the panel interaction service with the provided configuration.
@@ -50,6 +51,7 @@ export function initPanelInteractionService(config) {
   getSuppressRightContextUntil = config.getSuppressRightContextUntil;
   handleDrop = config.handleDrop;
   onOpenDirectorySets = config.onOpenDirectorySets;
+  onDirectoryViewChange = config.onDirectoryViewChange;
 }
 
 
@@ -254,6 +256,7 @@ export function bindPanel(
       if (panel.view === view) return;
       panel.view = view;
       setActiveSideFn(side);
+      onDirectoryViewChange?.(side);
 
       // Render the panel and immediately re-bind its elements so view buttons stay responsive
       renderPanel(side);
@@ -297,6 +300,9 @@ export function bindPanel(
     );
     applyThumbnailSize(panel);
   });
+  sizeSlider?.addEventListener("change", () =>
+    onDirectoryViewChange?.(side),
+  );
 
   panelEl.querySelectorAll("[data-sort]").forEach((heading) =>
     heading.addEventListener("click", () => {
