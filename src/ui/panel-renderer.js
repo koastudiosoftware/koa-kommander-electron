@@ -59,8 +59,30 @@ export function renderPanel(
 
   if (!panelEl) return;
 
+  // Rendering replaces the scrollable file area. Keep its position when this
+  // is a refresh of the same directory, such as after moving or deleting an
+  // item. A directory change should still start at the top.
+  const previousPath = panelEl.dataset.renderedPath;
+  const previousFileArea = panelEl.querySelector(".file-area");
+  const sameDirectory =
+    previousPath &&
+    panel.path &&
+    previousPath.toLowerCase() === panel.path.toLowerCase();
+  const scrollPosition = sameDirectory && previousFileArea
+    ? { top: previousFileArea.scrollTop, left: previousFileArea.scrollLeft }
+    : null;
+
   panelEl.classList.toggle("is-active", currentActiveSide === side);
   panelEl.innerHTML = `${panelChrome(side, panels, detectedDrives)}${renderEntries(side, panels, preferences)}<div class="panel-bottom">${panelStatus(panel)}</div>`;
+  panelEl.dataset.renderedPath = panel.path || "";
+
+  if (scrollPosition) {
+    const fileArea = panelEl.querySelector(".file-area");
+    if (fileArea) {
+      fileArea.scrollTop = scrollPosition.top;
+      fileArea.scrollLeft = scrollPosition.left;
+    }
+  }
 
   if (panel.view === "icons") {
     applyThumbnailSize(panel);
