@@ -66,11 +66,11 @@ import {
 } from "./ui/settings-service.js";
 
 import {
-  clearRightDropTargets,
   initDragDropService,
   handlePointerDown,
   handlePointerMove,
   handlePointerUp,
+  handlePointerCancel,
   getSuppressRightContextUntil,
   isDraggingCandidate,
   executeDropAction,
@@ -175,7 +175,6 @@ const aboutBackdrop = document.querySelector("#about-backdrop");
 const propertiesBackdrop = document.querySelector("#properties-backdrop");
 let defaultThumbnailCachePath = "";
 let activeFolderSizeRequest = null;
-let rightDragCandidate = null;
 
 const workspaceElement = document.querySelector(".workspace");
 const splitterElement = document.querySelector(".splitter");
@@ -285,8 +284,6 @@ initPanelInteractionService({
   showContextMenu,
   showBackgroundContextMenu,
   updateSummary,
-  getRightDragCandidate: () => rightDragCandidate,
-  // getSuppressRightContextUntil: () => suppressRightContextUntil,
   getRightDragCandidate,
   getSuppressRightContextUntil,
   handleDrop,
@@ -907,19 +904,14 @@ document.addEventListener("pointermove", (event) => {
 
 window.addEventListener("pointerup", handlePointerUp);
 
-window.addEventListener("pointercancel", (event) => {
-  if (rightDragCandidate?.pointerId !== event.pointerId) return;
-  rightDragCandidate = null;
-  document.body.classList.remove("right-dragging");
-  clearRightDropTargets();
-});
+window.addEventListener("pointercancel", handlePointerCancel);
 
 document.addEventListener("contextmenu", (event) => {
   if (isDraggingCandidate() || Date.now() < getSuppressRightContextUntil()) {
     event.preventDefault();
-    event.stopPropagation();
+    event.stopImmediatePropagation();
   }
-});
+}, true);
 
 dropActionMenu.addEventListener("click", async (event) => {
   const choice = event.target.closest("[data-drop-choice]")?.dataset.dropChoice;

@@ -167,6 +167,16 @@ export function handlePointerUp(event) {
   else toast("Drop on the other panel to choose an action");
 }
 
+export function handlePointerCancel(event) {
+  const drag = rightDragCandidate;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  rightDragCandidate = null;
+  if (!drag.dragging) return;
+  document.body.classList.remove("right-dragging");
+  clearRightDropTargets();
+  suppressRightContextUntil = Date.now() + 700;
+}
+
 /**
  *
  * @returns
