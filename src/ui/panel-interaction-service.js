@@ -504,16 +504,9 @@ export function bindPanel(
         return;
       }
 
-      const activeSide = getActiveSideFn();
-      if (activeSide === side) {
-        if (panel.selected.size > 0) {
-          panel.selected.clear();
-          refreshSelection(activeSide);
-        }
-      } else {
-        setActiveSideFn(side);
-        refreshSelection(side);
-      }
+      setActiveSideFn(side);
+      if (panel.selected.size > 0) panel.selected.clear();
+      refreshSelection(side);
     });
 
     // 2. Drag-to-select (Rubber-band box) using pointer events
