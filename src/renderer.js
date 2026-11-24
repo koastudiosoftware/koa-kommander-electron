@@ -188,6 +188,10 @@ const nameDialogForm = document.querySelector("#name-dialog-form");
 const nameDialogInput = document.querySelector("#name-dialog-input");
 const aboutBackdrop = document.querySelector("#about-backdrop");
 const propertiesBackdrop = document.querySelector("#properties-backdrop");
+const minimizeWindowButton = document.querySelector("#window-minimize");
+const maximizeWindowButton = document.querySelector("#window-maximize");
+const closeWindowButton = document.querySelector("#window-close");
+const appTitle = document.querySelector("#app-title");
 let defaultThumbnailCachePath = "";
 let activeFolderSizeRequest = null;
 
@@ -1204,6 +1208,30 @@ document.addEventListener("keydown", async (event) => {
 // ============================================================================
 // 17. SETTINGS & DIALOG BINDINGS
 // ============================================================================
+
+const updateMaximizeButton = (maximized) => {
+  maximizeWindowButton.classList.toggle("is-maximized", maximized);
+  maximizeWindowButton.title = maximized ? "Restore" : "Maximize";
+  maximizeWindowButton.setAttribute(
+    "aria-label",
+    maximized ? "Restore window" : "Maximize window",
+  );
+};
+
+window.fileManager.windowIsMaximized().then(updateMaximizeButton);
+window.fileManager.onWindowMaximized(updateMaximizeButton);
+minimizeWindowButton.addEventListener("click", () =>
+  window.fileManager.windowControl("minimize"),
+);
+maximizeWindowButton.addEventListener("click", () =>
+  window.fileManager.windowControl("toggle-maximize"),
+);
+closeWindowButton.addEventListener("click", () =>
+  window.fileManager.windowControl("close"),
+);
+appTitle.addEventListener("dblclick", () =>
+  window.fileManager.windowControl("toggle-maximize"),
+);
 
 document
   .querySelector("#settings-button")

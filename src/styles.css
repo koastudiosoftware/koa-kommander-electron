@@ -822,16 +822,92 @@ kbd {
   flex: 0 0 37px;
   display: flex;
   align-items: stretch;
-  padding: 0 18px;
+  padding: 0 0 0 18px;
   background: #ffffff;
   border-bottom: 1px solid #e2e8f0;
+  -webkit-app-region: drag;
+}
+.app-header button,
+.app-header form,
+.app-header input,
+.app-header select {
+  -webkit-app-region: no-drag;
 }
 .tool-row {
   height: 37px;
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 3px;
+}
+.titlebar-app-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin-right: 5px;
+  object-fit: contain;
+  -webkit-app-region: no-drag;
+  -webkit-user-drag: none;
+}
+.app-title {
+  flex: 1 1 0;
+  min-width: 96px;
+  overflow: hidden;
+  padding: 0 12px;
+  color: #475569;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+}
+.window-controls {
+  height: 100%;
+  display: flex;
+  flex: 0 0 auto;
+  margin-left: 2px;
+  -webkit-app-region: no-drag;
+}
+.window-control {
+  width: 46px;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #475569;
+  font: 16px "Segoe UI", Arial, sans-serif;
+  cursor: pointer;
+}
+.window-control:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+.window-control:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -3px;
+}
+.window-close {
+  font-size: 20px;
+}
+.window-close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+.maximize-glyph {
+  width: 10px;
+  height: 10px;
+  border: 1px solid currentColor;
+}
+.window-control.is-maximized .maximize-glyph {
+  width: 9px;
+  height: 9px;
+  border-width: 1px;
+  box-shadow: 2px -2px 0 -1px #ffffff, 2px -2px 0 0 currentColor;
 }
 .dummy-tool {
   width: 29px;
@@ -2450,6 +2526,20 @@ kbd {
 :root[data-theme="dark"] .brand-name span {
   color: #60a5fa;
 }
+:root[data-theme="dark"] .app-title {
+  color: #cbd5e1;
+}
+:root[data-theme="dark"] .window-control {
+  color: #cbd5e1;
+}
+:root[data-theme="dark"] .window-control:hover {
+  background: #334155;
+  color: #f8fafc;
+}
+:root[data-theme="dark"] .window-control.window-close:hover {
+  background: #c42b1c;
+  color: #ffffff;
+}
 :root[data-theme="dark"] .header-caption,
 :root[data-theme="dark"] .shortcut-hint {
   color: #94a3b8;
@@ -2849,6 +2939,18 @@ kbd {
   :root[data-theme="system"] .toolbar {
     border-color: #334155;
     color: #cbd5e1;
+  }
+  :root[data-theme="system"] .app-title,
+  :root[data-theme="system"] .window-control {
+    color: #cbd5e1;
+  }
+  :root[data-theme="system"] .window-control:hover {
+    background: #334155;
+    color: #f8fafc;
+  }
+  :root[data-theme="system"] .window-control.window-close:hover {
+    background: #c42b1c;
+    color: #ffffff;
   }
   :root[data-theme="system"] .pathbar {
     background: #0f172a;

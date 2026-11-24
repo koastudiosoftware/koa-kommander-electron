@@ -39,6 +39,13 @@ contextBridge.exposeInMainWorld("fileManager", {
   startNativeFileDrag: (paths) =>
     ipcRenderer.send("fs:start-native-file-drag", paths),
   pathForDroppedFile: (file) => webUtils.getPathForFile(file),
+  windowControl: (action) => ipcRenderer.send("app:window-control", action),
+  windowIsMaximized: () => ipcRenderer.invoke("app:window-is-maximized"),
+  onWindowMaximized: (callback) => {
+    const listener = (_event, maximized) => callback(maximized);
+    ipcRenderer.on("app:window-maximized", listener);
+    return () => ipcRenderer.removeListener("app:window-maximized", listener);
+  },
   createShortcuts: (request) =>
     ipcRenderer.invoke("fs:create-shortcuts", request),
   createShortcutWizard: (directory) =>

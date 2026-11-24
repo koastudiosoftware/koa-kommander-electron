@@ -290,6 +290,7 @@ function createWindow() {
   const win = new BrowserWindow({
     width: windowState.width,
     height: windowState.height,
+    frame: false,
     minWidth: 900,
     minHeight: 600,
     backgroundColor: "#f4f6f8",
@@ -320,6 +321,8 @@ function createWindow() {
   win.on("resize", scheduleSave);
   win.on("maximize", scheduleSave);
   win.on("unmaximize", scheduleSave);
+  win.on("maximize", () => win.webContents.send("app:window-maximized", true));
+  win.on("unmaximize", () => win.webContents.send("app:window-maximized", false));
   win.on("close", () => {
     clearTimeout(saveTimer);
     saveWindowState(win);
@@ -346,6 +349,20 @@ function createWindow() {
 
   return win;
 }
+
+ipcMain.on('app:window-control', (event, action) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  if (action === 'minimize') win.minimize();
+  else if (action === 'toggle-maximize') {
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+  } else if (action === 'close') win.close();
+});
+
+ipcMain.handle('app:window-is-maximized', (event) =>
+  BrowserWindow.fromWebContents(event.sender)?.isMaximized() || false,
+);
 
 /**
  * Retrieves file information for a directory entry.
