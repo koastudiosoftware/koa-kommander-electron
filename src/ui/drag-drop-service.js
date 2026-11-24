@@ -1,7 +1,7 @@
 import { toast } from "../utils/panel-utils.js";
 
 let panels, activeSide, getSelected, transferWithConflicts, navigate;
-let dropActionMenu, dragPreview, getThumbnail;
+let dropActionMenu, dragPreview, getThumbnail, refreshSelection;
 let rightDragCandidate = null;
 let pendingRightDrop = null;
 let suppressRightContextUntil = 0;
@@ -30,6 +30,7 @@ export function initDragDropService(config) {
   dropActionMenu = config.dropActionMenu;
   dragPreview = config.dragPreview;
   getThumbnail = config.getThumbnail;
+  refreshSelection = config.refreshSelection;
 
   // Handle clicking outside the drop action menu to dismiss it
   document.addEventListener("mousedown", (event) => {
@@ -88,7 +89,7 @@ export function updateRightDropTarget(x, y) {
   clearRightDropTargets();
   const underPointer = document.elementFromPoint(x, y);
   const targetPanel = underPointer?.closest(".panel");
-  if (!targetPanel || targetPanel.dataset.panel === rightDragCandidate.side) {
+  if (!targetPanel) {
     rightDragCandidate.destination = null;
     return;
   }
@@ -117,8 +118,8 @@ export function updateRightDropTarget(x, y) {
  * @param {*} x
  * @param {*} y
  */
-export function openDropActionMenu(paths, destination, x, y) {
-  pendingRightDrop = { paths, destination };
+export function openDropActionMenu(paths, destination, x, y, side = null) {
+  pendingRightDrop = { paths, destination, side };
   dropActionMenu.hidden = false;
   const width = dropActionMenu.offsetWidth;
   const height = dropActionMenu.offsetHeight;
@@ -206,6 +207,7 @@ export function handlePointerUp(event) {
       drag.destination,
       event.clientX,
       event.clientY,
+      drag.side,
     );
   else toast("Drop on the other panel to choose an action");
 }
@@ -247,7 +249,17 @@ export async function executeDropAction(choice) {
   if (!choice || !drop) return;
   dropActionMenu.hidden = true;
   pendingRightDrop = null;
-  if (choice === "cancel") return;
+  if (choice === "cancel") {
+    const sourcePanel = drop.side && panels[drop.side];
+    if (sourcePanel) {
+      drop.paths.forEach((path) => sourcePanel.selected.delete(path));
+      refreshSelection(activeSide());
+    }
+    document.body.classList.remove("right-dragging");
+    hideRightDragPreview();
+    clearRightDropTargets();
+    return;
+  }
   if (choice === "shortcut") {
     const results = await window.fileManager.createShortcuts({
       sources: drop.paths,
@@ -272,7 +284,8 @@ export async function executeDropAction(choice) {
   );
   const cancelled = results.some((item) => item.cancelled);
   const skipped = results.filter((item) => item.skipped).length;
-  const succeeded = results.filter((item) => item.ok).length;
+  const succeeded = results.filter((item) => item.ok && !item.unchanged).length;
+  const unchanged = results.filter((item) => item.unchanged).length;
   await Promise.all([
     navigate("left", panels.left.path),
     navigate("right", panels.right.path),
@@ -290,6 +303,7 @@ export async function executeDropAction(choice) {
     );
   else if (skipped)
     toast(`Skipped ${skipped} existing item${skipped === 1 ? "" : "s"}`);
+  else if (unchanged && !succeeded) toast("Already in this folder");
   else
     toast(
       `${choice === "copy" ? "Copied" : "Moved"} ${succeeded} item${succeeded === 1 ? "" : "s"}`,

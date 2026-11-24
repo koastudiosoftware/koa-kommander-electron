@@ -659,6 +659,10 @@ ipcMain.handle('fs:transfer', async (_event, { sources, destination, operation, 
     try {
       const sourceStats = await fs.stat(source);
       const sameDirectory = pathsEqual(path.dirname(source), targetDirectory);
+      if (sameDirectory && operation === 'move') {
+        results.push({ source, target: source, ok: true, unchanged: true });
+        continue;
+      }
       if (!sameDirectory && pathsEqual(source, path.join(targetDirectory, path.basename(source)))) {
         results.push({ source, ok: false, error: 'Source and destination are the same.' });
         continue;

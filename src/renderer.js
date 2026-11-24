@@ -75,6 +75,7 @@ import {
   isDraggingCandidate,
   executeDropAction,
   getRightDragCandidate,
+  openDropActionMenu,
 } from "./ui/drag-drop-service.js";
 
 import {
@@ -215,6 +216,7 @@ initDragDropService({
   navigate,
   dropActionMenu,
   dragPreview: document.querySelector("#right-drag-preview"),
+  refreshSelection,
   getThumbnail: (side, entry) => {
     const panel = panels[side];
     const entryIndex = panel.entries.indexOf(entry);
@@ -959,6 +961,22 @@ async function handleDrop(event, destinationSide, destination) {
   } catch {
     return;
   }
+  const normalizePath = (value) => value.replace(/[\\/]+$/, "").toLocaleLowerCase();
+  const sameFolderDrop = payload.paths.length > 0 && payload.paths.every((source) => {
+    const separator = Math.max(source.lastIndexOf("/"), source.lastIndexOf("\\"));
+    const sourceParent = separator < 0 ? "" : source.slice(0, separator);
+    return normalizePath(sourceParent) === normalizePath(destination);
+  });
+  if (sameFolderDrop) {
+    openDropActionMenu(
+      payload.paths,
+      { side: destinationSide, path: destination },
+      event.clientX,
+      event.clientY,
+      payload.side,
+    );
+    return;
+  }
   const operation = event.ctrlKey ? "copy" : "move";
   const result = await transferWithConflicts({
     sources: payload.paths,
@@ -973,7 +991,8 @@ async function handleDrop(event, destinationSide, destination) {
     navigate("left", panels.left.path),
     navigate("right", panels.right.path),
   ]);
-  const succeeded = result.filter((item) => item.ok).length;
+  const succeeded = result.filter((item) => item.ok && !item.unchanged).length;
+  const unchanged = result.filter((item) => item.unchanged).length;
   const skipped = result.filter((item) => item.skipped).length;
   if (failed) toast(failed.error);
   else if (cancelled)
@@ -988,6 +1007,7 @@ async function handleDrop(event, destinationSide, destination) {
     );
   else if (skipped)
     toast(`Skipped ${skipped} existing item${skipped === 1 ? "" : "s"}`);
+  else if (unchanged && !succeeded) toast("Already in this folder");
   else
     toast(
       `${operation === "copy" ? "Copied" : "Moved"} ${succeeded} item${succeeded === 1 ? "" : "s"}`,
