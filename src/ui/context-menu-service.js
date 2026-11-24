@@ -84,15 +84,14 @@ export function getSelected(side) {
  * Pastes the copied or cut items into the current panel.
  * @returns {Promise<void>}
  */
-export async function pasteSelection() {
+export async function pasteSelection(side = getActiveSide()) {
   const clipboard = getClipboard();
-  const activeSide = getActiveSide();
   if (!clipboard?.paths.length) return;
 
   const operation = clipboard.operation;
   const result = await transferWithConflicts({
     sources: clipboard.paths,
-    destination: panels[activeSide].path,
+    destination: panels[side].path,
     operation,
   });
 

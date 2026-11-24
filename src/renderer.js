@@ -690,7 +690,7 @@ function showContextMenu(x, y, side, entry) {
   const topActions = [
     ["Cut", "Ctrl+X", "cut", () => copySelection(side, true)],
     ["Copy", "Ctrl+C", "copy", () => copySelection(side, false)],
-    ["Paste", "Ctrl+V", "paste", () => pasteSelection()],
+    ["Paste", "Ctrl+V", "paste", () => pasteSelection(side)],
     ["Rename", "", "rename", () => renameSelection(side)],
     ["Delete", "Delete", "delete", () => deleteSelection(side)],
   ];
@@ -782,10 +782,12 @@ function showContextMenu(x, y, side, entry) {
 
 function showBackgroundContextMenu(x, y, side) {
   menu.innerHTML =
-    '<div class="context-menu-item context-submenu-parent"><button role="menuitem" data-open-new-submenu aria-haspopup="true" aria-expanded="false">New<span aria-hidden="true">›</span></button><div class="context-submenu" hidden><button role="menuitem" data-background-action="folder">Folder</button><button role="menuitem" data-background-action="shortcut">Shortcut</button></div></div><div class="menu-separator"></div><button role="menuitem" data-background-action="properties">Properties</button><button role="menuitem" data-background-action="explorer">Open in File Explorer</button>';
+    `<div class="context-menu-top-row"><button role="menuitem" class="context-top-button" data-background-action="paste" title="Paste">${actionIcon("paste")}<span>Paste</span></button></div><div class="menu-separator"></div><div class="context-menu-item context-submenu-parent"><button role="menuitem" data-open-new-submenu aria-haspopup="true" aria-expanded="false">New<span aria-hidden="true">›</span></button><div class="context-submenu" hidden><button role="menuitem" data-background-action="folder">Folder</button><button role="menuitem" data-background-action="shortcut">Shortcut</button></div></div><div class="menu-separator"></div><button role="menuitem" data-background-action="properties">Properties</button><button role="menuitem" data-background-action="explorer">Open in File Explorer</button>`;
   menu.hidden = false;
-  menu.style.left = `${Math.max(8, Math.min(x, innerWidth - 218))}px`;
-  menu.style.top = `${Math.max(8, Math.min(y, innerHeight - 150))}px`;
+  const menuWidth = menu.offsetWidth;
+  const menuHeight = menu.offsetHeight;
+  menu.style.left = `${Math.max(8, Math.min(x, innerWidth - menuWidth - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, innerHeight - menuHeight - 8))}px`;
   const submenuParent = menu.querySelector(".context-submenu-parent");
   const submenuButton = menu.querySelector("[data-open-new-submenu]");
   const submenu = menu.querySelector(".context-submenu");
@@ -816,6 +818,8 @@ function showBackgroundContextMenu(x, y, side) {
       document.removeEventListener("mousedown", dismissBackgroundMenu);
       if (action === "folder") {
         await createFolder(side);
+      } else if (action === "paste") {
+        await pasteSelection(side);
       } else if (action === "shortcut") {
         try {
           const result = await window.fileManager.createShortcutWizard(
