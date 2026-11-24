@@ -140,11 +140,17 @@ export async function renameSelection(side) {
   }
 
   const item = selected[0];
+  const extensionIndex = item.isDirectory ? -1 : item.name.lastIndexOf(".");
+  const selectionEnd =
+    extensionIndex > 0 && extensionIndex < item.name.length - 1
+      ? extensionIndex
+      : item.name.length;
   const name = await askForName({
     title: "Rename item",
     label: "New name",
     value: item.name,
     confirmLabel: "Rename",
+    selectionEnd,
   });
 
   if (name === null || !name.trim() || name.trim() === item.name) return;

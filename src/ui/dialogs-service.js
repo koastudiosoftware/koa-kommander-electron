@@ -308,7 +308,13 @@ export function finishConflictDecision(decision) {
  * @param {string} param0.confirmLabel
  * @returns {Promise<string>}
  */
-export function askForName({ title, label, value = "", confirmLabel }) {
+export function askForName({
+  title,
+  label,
+  value = "",
+  confirmLabel,
+  selectionEnd = value.length,
+}) {
   nameDialogBackdrop.querySelector("#name-dialog-title").textContent = title;
   nameDialogBackdrop.querySelector("#name-dialog-label").textContent = label;
   nameDialogInput.value = value;
@@ -316,7 +322,7 @@ export function askForName({ title, label, value = "", confirmLabel }) {
     confirmLabel;
   nameDialogBackdrop.hidden = false;
   nameDialogInput.focus();
-  nameDialogInput.select();
+  nameDialogInput.setSelectionRange(0, selectionEnd);
   return new Promise((resolve) => {
     resolveNameDialog = resolve;
   });
