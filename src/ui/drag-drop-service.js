@@ -1,8 +1,8 @@
 import { toast } from "../utils/panel-utils.js";
 
 let panels, activeSide, getSelected, transferWithConflicts, navigate;
-let dropActionMenu,
-  rightDragCandidate = null;
+let dropActionMenu, dragPreview, getThumbnail;
+let rightDragCandidate = null;
 let pendingRightDrop = null;
 let suppressRightContextUntil = 0;
 
@@ -28,6 +28,8 @@ export function initDragDropService(config) {
   transferWithConflicts = config.transferWithConflicts;
   navigate = config.navigate;
   dropActionMenu = config.dropActionMenu;
+  dragPreview = config.dragPreview;
+  getThumbnail = config.getThumbnail;
 
   // Handle clicking outside the drop action menu to dismiss it
   document.addEventListener("mousedown", (event) => {
@@ -36,6 +38,44 @@ export function initDragDropService(config) {
       pendingRightDrop = null;
     }
   });
+}
+
+function positionRightDragPreview(x, y) {
+  if (!dragPreview || dragPreview.hidden) return;
+  const size = dragPreview.offsetWidth || 72;
+  dragPreview.style.left = `${Math.max(4, Math.min(x + 16, innerWidth - size - 4))}px`;
+  dragPreview.style.top = `${Math.max(4, Math.min(y + 16, innerHeight - size - 4))}px`;
+}
+
+function showRightDragPreview(drag, x, y) {
+  if (!dragPreview) return;
+  const image = dragPreview.querySelector("img");
+  const count = dragPreview.querySelector("span");
+  image.hidden = true;
+  image.removeAttribute("src");
+  count.hidden = true;
+  count.textContent = "";
+
+  dragPreview.hidden = false;
+  positionRightDragPreview(x, y);
+
+  if (drag.paths.length > 1) {
+    count.textContent = String(drag.paths.length);
+    count.hidden = false;
+  } else if (drag.entry.isFile && typeof getThumbnail === "function") {
+    Promise.resolve()
+      .then(() => getThumbnail(drag.side, drag.entry))
+      .then((thumbnail) => {
+        if (!thumbnail || rightDragCandidate !== drag || !drag.dragging) return;
+        image.src = thumbnail;
+        image.hidden = false;
+      })
+      .catch(() => {});
+  }
+}
+
+function hideRightDragPreview() {
+  if (dragPreview) dragPreview.hidden = true;
 }
 
 /**
@@ -137,9 +177,11 @@ export function handlePointerMove(event, refreshSelectionFn) {
       panel.selected.add(drag.entry.path);
     }
     refreshSelectionFn();
+    showRightDragPreview(drag, event.clientX, event.clientY);
   }
   if (!drag.dragging) return;
   event.preventDefault();
+  positionRightDragPreview(event.clientX, event.clientY);
   updateRightDropTarget(event.clientX, event.clientY);
 }
 
@@ -153,6 +195,7 @@ export function handlePointerUp(event) {
   if (!drag || drag.pointerId !== event.pointerId) return;
   rightDragCandidate = null;
   if (!drag.dragging) return;
+  hideRightDragPreview();
   document.body.classList.remove("right-dragging");
   event.preventDefault();
   clearRightDropTargets();
@@ -172,6 +215,7 @@ export function handlePointerCancel(event) {
   if (!drag || drag.pointerId !== event.pointerId) return;
   rightDragCandidate = null;
   if (!drag.dragging) return;
+  hideRightDragPreview();
   document.body.classList.remove("right-dragging");
   clearRightDropTargets();
   suppressRightContextUntil = Date.now() + 700;

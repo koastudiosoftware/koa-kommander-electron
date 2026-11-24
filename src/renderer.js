@@ -213,6 +213,19 @@ initDragDropService({
   transferWithConflicts,
   navigate,
   dropActionMenu,
+  dragPreview: document.querySelector("#right-drag-preview"),
+  getThumbnail: (side, entry) => {
+    const panel = panels[side];
+    const entryIndex = panel.entries.indexOf(entry);
+    const loadedThumbnail =
+      entryIndex >= 0
+        ? panel.element.querySelector(
+            `[data-entry="${entryIndex}"] .thumbnail-image`,
+          )
+        : null;
+    return loadedThumbnail?.src ||
+      window.fileManager.thumbnail(entry.path, preferences.thumbnailCachePath);
+  },
 });
 
 initClipboardService({

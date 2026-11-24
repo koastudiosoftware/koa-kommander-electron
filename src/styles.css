@@ -1663,6 +1663,37 @@ kbd {
   user-select: none;
   cursor: grabbing;
 }
+.right-drag-preview[hidden] {
+  display: none;
+}
+.right-drag-preview {
+  position: fixed;
+  z-index: 89;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border: 1px solid #8794a1;
+  background: #fff;
+  box-shadow: 0 2px 6px #17212b30;
+  pointer-events: none;
+}
+.right-drag-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.right-drag-preview img[hidden],
+.right-drag-preview span[hidden] {
+  display: none;
+}
+.right-drag-preview span {
+  color: #46525e;
+  font: 600 22px "Segoe UI", Arial, sans-serif;
+  line-height: 1;
+}
 
 .history-menu {
   position: fixed;
