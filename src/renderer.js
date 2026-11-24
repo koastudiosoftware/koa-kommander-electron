@@ -1018,7 +1018,41 @@ document.addEventListener("keydown", async (event) => {
     return;
   }
   const mod = event.ctrlKey || event.metaKey;
-  if (mod && event.key.toLowerCase() === "c") {
+  const target = event.target;
+  const isEditingText =
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+  if (
+    !mod &&
+    !event.altKey &&
+    !isEditingText &&
+    /^\p{L}$/u.test(event.key)
+  ) {
+    const panel = panels[activeSide];
+    const panelEl = document.querySelector(
+      `.panel[data-panel="${activeSide}"]`,
+    );
+    const key = event.key.toLocaleLowerCase();
+    const match = [...(panelEl?.querySelectorAll("[data-entry]") || [])].find(
+      (item) => {
+        const name =
+          item.querySelector(".file-name")?.textContent ||
+          item.querySelector(".tile-name")?.textContent ||
+          "";
+        return name.toLocaleLowerCase().startsWith(key);
+      },
+    );
+    if (match) {
+      const entry = panel.entries[Number(match.dataset.entry)];
+      if (entry) {
+        panel.selected.clear();
+        panel.selected.add(entry.path);
+        refreshSelection(activeSide);
+        match.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+    }
+  } else if (mod && event.key.toLowerCase() === "c") {
     event.preventDefault();
     copySelection(activeSide, false);
   } else if (mod && event.key.toLowerCase() === "x") {
