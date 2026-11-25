@@ -5,7 +5,7 @@ import {
   imageExtensions,
 } from "../utils/panel-utils.js";
 
-let preferences, getActiveSide;
+let panels, preferences, getActiveSide, navigate;
 let summary, historyMenu;
 let diskSpaceTimer = null;
 let diskSpaceRequestId = 0;
@@ -16,8 +16,10 @@ let displayedSpacePath = null;
  * @param {*} config
  */
 export function initThumbnailHistoryService(config) {
+  panels = config.panels;
   preferences = config.preferences;
   getActiveSide = config.getActiveSide;
+  navigate = config.navigate;
   summary = config.summary;
   historyMenu = config.historyMenu;
 

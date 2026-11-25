@@ -4,7 +4,7 @@ let panels, activeSide, getSelected, transferWithConflicts, navigate;
 let dropActionMenu, dragPreview, getThumbnail, refreshSelection;
 let rightDragCandidate = null;
 let pendingRightDrop = null;
-let suppressRightContextUntil = 0;
+let suppressedRightContextPoint = null;
 
 /**
  * Clears all right drop targets.
@@ -23,7 +23,7 @@ export function clearRightDropTargets() {
  */
 export function initDragDropService(config) {
   panels = config.panels;
-  activeSide = () => config.activeSide;
+  activeSide = config.activeSide;
   getSelected = config.getSelected;
   transferWithConflicts = config.transferWithConflicts;
   navigate = config.navigate;
@@ -39,6 +39,8 @@ export function initDragDropService(config) {
       pendingRightDrop = null;
     }
   });
+
+  window.addEventListener("blur", resetRightDragState);
 }
 
 function positionRightDragPreview(x, y) {
@@ -77,6 +79,30 @@ function showRightDragPreview(drag, x, y) {
 
 function hideRightDragPreview() {
   if (dragPreview) dragPreview.hidden = true;
+}
+
+function resetRightDragState() {
+  const wasDragging = rightDragCandidate?.dragging;
+  rightDragCandidate = null;
+  suppressedRightContextPoint = null;
+  if (!wasDragging) return;
+  document.body.classList.remove("right-dragging");
+  hideRightDragPreview();
+  clearRightDropTargets();
+}
+
+export function shouldSuppressRightContext(event) {
+  if (rightDragCandidate?.dragging) return true;
+  const point = suppressedRightContextPoint;
+  if (!point) return false;
+  if (Date.now() >= point.expires) {
+    suppressedRightContextPoint = null;
+    return false;
+  }
+  if (Math.hypot(event.clientX - point.x, event.clientY - point.y) > 24)
+    return false;
+  suppressedRightContextPoint = null;
+  return true;
 }
 
 /**
@@ -135,6 +161,8 @@ export function openDropActionMenu(paths, destination, x, y, side = null) {
  * @returns
  */
 export function handlePointerDown(event, panelsRef, getSelectedFn) {
+  // A new pointer action supersedes a right drag whose pointer-up was lost.
+  resetRightDragState();
   if (event.button !== 2) return;
   const row = event.target.closest("[data-entry]");
   const panelElement = row?.closest(".panel");
@@ -177,7 +205,7 @@ export function handlePointerMove(event, refreshSelectionFn) {
       panel.selected.clear();
       panel.selected.add(drag.entry.path);
     }
-    refreshSelectionFn();
+    refreshSelectionFn(activeSide());
     showRightDragPreview(drag, event.clientX, event.clientY);
   }
   if (!drag.dragging) return;
@@ -200,7 +228,11 @@ export function handlePointerUp(event) {
   document.body.classList.remove("right-dragging");
   event.preventDefault();
   clearRightDropTargets();
-  suppressRightContextUntil = Date.now() + 700;
+  suppressedRightContextPoint = {
+    x: event.clientX,
+    y: event.clientY,
+    expires: Date.now() + 700,
+  };
   if (drag.destination)
     openDropActionMenu(
       drag.paths,
@@ -220,23 +252,11 @@ export function handlePointerCancel(event) {
   hideRightDragPreview();
   document.body.classList.remove("right-dragging");
   clearRightDropTargets();
-  suppressRightContextUntil = Date.now() + 700;
-}
-
-/**
- *
- * @returns
- */
-export function getSuppressRightContextUntil() {
-  return suppressRightContextUntil;
-}
-
-/**
- *
- * @returns
- */
-export function isDraggingCandidate() {
-  return Boolean(rightDragCandidate?.dragging);
+  suppressedRightContextPoint = {
+    x: event.clientX,
+    y: event.clientY,
+    expires: Date.now() + 700,
+  };
 }
 
 /**
@@ -247,6 +267,7 @@ export function isDraggingCandidate() {
 export async function executeDropAction(choice) {
   const drop = pendingRightDrop;
   if (!choice || !drop) return;
+  resetRightDragState();
   dropActionMenu.hidden = true;
   pendingRightDrop = null;
   if (choice === "cancel") {

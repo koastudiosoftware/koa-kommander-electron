@@ -72,8 +72,7 @@ import {
   handlePointerMove,
   handlePointerUp,
   handlePointerCancel,
-  getSuppressRightContextUntil,
-  isDraggingCandidate,
+  shouldSuppressRightContext,
   executeDropAction,
   getRightDragCandidate,
   openDropActionMenu,
@@ -313,8 +312,10 @@ initSettingsService({
 });
 
 initThumbnailHistoryService({
+  panels,
   preferences: () => preferences,
   getActiveSide: () => activeSide,
+  navigate,
   summary,
   historyMenu,
 });
@@ -355,8 +356,6 @@ initPanelInteractionService({
   showContextMenu,
   showBackgroundContextMenu,
   updateSummary,
-  getRightDragCandidate,
-  getSuppressRightContextUntil,
   handleDrop,
   onDirectoryViewChange: (side) =>
     saveDirectoryViewState(panels[side].path, panels[side]),
@@ -1116,10 +1115,26 @@ window.addEventListener("pointerup", handlePointerUp);
 window.addEventListener("pointercancel", handlePointerCancel);
 
 document.addEventListener("contextmenu", (event) => {
-  if (isDraggingCandidate() || Date.now() < getSuppressRightContextUntil()) {
+  if (shouldSuppressRightContext(event)) {
     event.preventDefault();
     event.stopImmediatePropagation();
+    return;
   }
+  const row = event.target.closest?.("[data-entry]");
+  const panelElement = row?.closest(".panel");
+  if (!row || !panelElement) return;
+  event.preventDefault();
+  const side = panelElement.dataset.panel;
+  const entry = panels[side]?.entries[Number(row.dataset.entry)];
+  if (!entry || getRightDragCandidate()?.dragging) return;
+  activeSide = side;
+  if (!panels[side].selected.has(entry.path)) {
+    panels[side].selected.clear();
+    panels[side].selected.add(entry.path);
+  }
+  refreshSelection(side);
+  showContextMenu(event.clientX, event.clientY, side, entry);
+  event.stopPropagation();
 }, true);
 
 dropActionMenu.addEventListener("click", async (event) => {

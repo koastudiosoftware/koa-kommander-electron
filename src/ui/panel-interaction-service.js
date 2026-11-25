@@ -22,8 +22,6 @@ let panels,
   showContextMenu,
   showBackgroundContextMenu,
   updateSummary,
-  getRightDragCandidate,
-  getSuppressRightContextUntil,
   handleDrop,
   onOpenDirectorySets;
 let onDirectoryViewChange;
@@ -47,8 +45,6 @@ export function initPanelInteractionService(config) {
   showContextMenu = config.showContextMenu;
   showBackgroundContextMenu = config.showBackgroundContextMenu;
   updateSummary = config.updateSummary;
-  getRightDragCandidate = config.getRightDragCandidate;
-  getSuppressRightContextUntil = config.getSuppressRightContextUntil;
   handleDrop = config.handleDrop;
   onOpenDirectorySets = config.onOpenDirectorySets;
   onDirectoryViewChange = config.onDirectoryViewChange;
@@ -438,23 +434,6 @@ export function bindPanel(
       const result = await window.fileManager.open(entry.path);
       if (result.navigateTo) navigate(side, result.navigateTo);
       else if (result.error) toast(result.error);
-    });
-
-    row.addEventListener("contextmenu", (event) => {
-      event.preventDefault();
-      const rightDragCandidate = getRightDragCandidate();
-      if (
-        rightDragCandidate?.dragging ||
-        Date.now() < getSuppressRightContextUntil()
-      )
-        return;
-      setActiveSideFn(side);
-      if (!panel.selected.has(entry.path)) {
-        panel.selected.clear();
-        panel.selected.add(entry.path);
-      }
-      refreshSelection(getActiveSideFn());
-      showContextMenu(event.clientX, event.clientY, side, entry);
     });
 
     row.addEventListener("dragstart", (event) => {
