@@ -5,7 +5,7 @@ import {
   imageExtensions,
 } from "../utils/panel-utils.js";
 
-let panels, preferences, getActiveSide, navigate, renderPanel, bindPanel;
+let preferences, getActiveSide;
 let summary, historyMenu;
 let diskSpaceTimer = null;
 let diskSpaceRequestId = 0;
@@ -16,36 +16,10 @@ let displayedSpacePath = null;
  * @param {*} config
  */
 export function initThumbnailHistoryService(config) {
-  panels = config.panels;
   preferences = config.preferences;
   getActiveSide = config.getActiveSide;
-  navigate = config.navigate;
-  renderPanel = config.renderPanel;
-  bindPanel = config.bindPanel;
   summary = config.summary;
   historyMenu = config.historyMenu;
-
-  // Directory change watch listener
-  window.fileManager.onDirectoryChanged(({ side, directory }) => {
-    const panel = panels[side];
-    if (!panel || panel.path !== directory) return;
-    window.fileManager
-      .list(directory)
-      .then((result) => {
-        if (panel.path !== directory) return;
-        panel.entries = result.entries;
-        const availablePaths = new Set(
-          result.entries.map((entry) => entry.path),
-        );
-        for (const selectedPath of panel.selected) {
-          if (!availablePaths.has(selectedPath))
-            panel.selected.delete(selectedPath);
-        }
-        renderPanel(side);
-        bindPanel(side);
-      })
-      .catch(() => {});
-  });
 
   // Global mousedown listener for history menu dismissal
   document.addEventListener("mousedown", (event) => {

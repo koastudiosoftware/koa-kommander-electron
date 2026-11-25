@@ -313,13 +313,8 @@ initSettingsService({
 });
 
 initThumbnailHistoryService({
-  panels,
   preferences: () => preferences,
   getActiveSide: () => activeSide,
-  navigate,
-  renderPanel: (side) =>
-    renderPanel(side, panels, activeSide, detectedDrives, preferences), // Use activeSide directly
-  bindPanel,
   summary,
   historyMenu,
 });
