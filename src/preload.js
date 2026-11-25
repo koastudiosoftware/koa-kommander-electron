@@ -64,6 +64,8 @@ contextBridge.exposeInMainWorld("fileManager", {
   },
   openInFileManager: (itemPath) =>
     ipcRenderer.invoke("fs:open-in-file-manager", itemPath),
+  terminalMenuOptions: () => ipcRenderer.invoke("shell:terminal-menu-options"),
+  openTerminal: (request) => ipcRenderer.invoke("shell:open-terminal", request),
   createFolder: (request) => ipcRenderer.invoke("fs:create-folder", request),
   rename: (request) => ipcRenderer.invoke("fs:rename", request),
 });

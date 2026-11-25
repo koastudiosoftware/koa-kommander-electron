@@ -5,9 +5,14 @@ const fsSync = require('node:fs');
 const { watch } = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { execFile, execFileSync } = require('node:child_process');
+const { execFile, execFileSync, spawn } = require('node:child_process');
 const windowsAppId = 'com.koastudio.koakommander.electron';
-if (process.platform === 'win32') app.setAppUserModelId(windowsAppId);
+if (process.platform === 'win32') {
+  app.setAppUserModelId(windowsAppId);
+  // The app does not benefit from persisting compiled GPU shaders, and stale
+  // shader-cache rotation can fail with access denied on Windows.
+  app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+}
 app.setPath('userData', path.join(app.getPath('appData'), app.getName()));
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 const directoryWatchers = new Map();
@@ -105,6 +110,164 @@ function runPowerShell(script, env = {}) {
     });
   });
 }
+
+function removeJsonComments(source) {
+  let output = '';
+  let inString = false;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    const next = source[index + 1];
+    if (lineComment) {
+      if (character === '\n') { lineComment = false; output += character; }
+      continue;
+    }
+    if (blockComment) {
+      if (character === '*' && next === '/') { blockComment = false; index += 1; }
+      else if (character === '\n') output += character;
+      continue;
+    }
+    if (inString) {
+      output += character;
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') { inString = true; output += character; }
+    else if (character === '/' && next === '/') { lineComment = true; index += 1; }
+    else if (character === '/' && next === '*') { blockComment = true; index += 1; }
+    else output += character;
+  }
+  return output.replace(/,\s*([}\]])/g, '$1');
+}
+
+async function getWslDistributions() {
+  if (process.platform !== 'win32') return { names: [], error: null };
+  return new Promise((resolve) => {
+    execFile('wsl.exe', ['--list', '--quiet'], { encoding: null, windowsHide: true, timeout: 8000 }, (error, stdout, stderr) => {
+      if (error) {
+        const detail = Buffer.isBuffer(stderr)
+          ? stderr.toString('utf16le').replace(/\0/g, '').trim() || error.message
+          : String(stderr || error.message).trim();
+        resolve({ names: [], error: detail });
+        return;
+      }
+      if (!stdout) { resolve({ names: [], error: null }); return; }
+      const text = stdout.toString('utf16le').replace(/^\uFEFF/, '').replace(/\0/g, '');
+      resolve({ names: [...new Set(text.split(/\r?\n/).map((name) => name.trim()).filter(Boolean))], error: null });
+    });
+  });
+}
+
+async function readWindowsTerminalSettings() {
+  const localAppData = process.env.LOCALAPPDATA;
+  if (!localAppData) return null;
+  const settingsPaths = [
+    path.join(localAppData, 'Packages', 'Microsoft.WindowsTerminal_8wekyb3d8bbwe', 'LocalState', 'settings.json'),
+    path.join(localAppData, 'Packages', 'Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe', 'LocalState', 'settings.json'),
+    path.join(localAppData, 'Microsoft', 'Windows Terminal', 'settings.json')
+  ];
+  for (const settingsPath of settingsPaths) {
+    try {
+      const source = await fs.readFile(settingsPath, 'utf8');
+      return { settingsPath, settings: JSON.parse(removeJsonComments(source)) };
+    } catch { /* Try the next Windows Terminal settings location. */ }
+  }
+  return null;
+}
+
+function terminalProfiles(terminalConfig) {
+  const profiles = terminalConfig?.settings?.profiles;
+  if (!profiles) return { list: [], defaults: {} };
+  const list = Array.isArray(profiles) ? profiles : (Array.isArray(profiles.list) ? profiles.list : []);
+  return { list: list.filter((profile) => profile && typeof profile === 'object'), defaults: profiles.defaults || {} };
+}
+
+function findTerminalProfile(profiles, kind, distribution) {
+  const expectedName = /powershell/i;
+  return profiles.find((profile) => {
+    const name = String(profile.name || '');
+    const commandline = String(profile.commandline || '');
+    const source = String(profile.source || '');
+    if (kind === 'powershell') return expectedName.test(name) || /(?:^|[\\/ ])(?:pwsh|powershell)(?:\.exe)?(?:\s|$)/i.test(commandline);
+    return name.toLowerCase() === distribution.toLowerCase()
+      && (source.toLowerCase().includes('wsl') || /wsl\.exe/i.test(commandline) || !source);
+  }) || null;
+}
+
+async function terminalProfileIcon(terminalConfig, profile, defaults) {
+  const configuredIcon = profile?.icon || defaults?.icon;
+  if (typeof configuredIcon !== 'string' || !configuredIcon || configuredIcon.startsWith('ms-appx:') || configuredIcon.startsWith('ms-appdata:')) return null;
+  let iconPath = expandEnvironmentVariables(configuredIcon);
+  if (iconPath.startsWith('file://')) {
+    try { iconPath = require('node:url').fileURLToPath(iconPath); } catch { return null; }
+  } else if (!path.isAbsolute(iconPath)) {
+    iconPath = path.resolve(path.dirname(terminalConfig.settingsPath), iconPath);
+  }
+  try {
+    await fs.access(iconPath);
+    let image = nativeImage.createFromPath(iconPath);
+    if (image.isEmpty()) image = await app.getFileIcon(iconPath, { size: 'small' });
+    return image.isEmpty() ? null : image.toDataURL();
+  } catch { return null; }
+}
+
+async function getTerminalMenuOptions() {
+  if (process.platform !== 'win32') return { powershell: { label: 'PowerShell', icon: null }, distributions: [] };
+  try {
+    const [wsl, terminalConfig] = await Promise.all([getWslDistributions(), readWindowsTerminalSettings()]);
+    const { list, defaults } = terminalProfiles(terminalConfig);
+    const powershellProfile = findTerminalProfile(list, 'powershell');
+    const powershellIcon = terminalConfig ? await terminalProfileIcon(terminalConfig, powershellProfile, defaults) : null;
+    const distributionOptions = await Promise.all(wsl.names.map(async (name) => {
+      const profile = findTerminalProfile(list, 'wsl', name);
+      return { name, icon: terminalConfig ? await terminalProfileIcon(terminalConfig, profile, defaults) : null };
+    }));
+    return { powershell: { label: 'PowerShell', icon: powershellIcon }, distributions: distributionOptions, error: wsl.error };
+  } catch (error) {
+    return { powershell: { label: 'PowerShell', icon: null }, distributions: [], error: error.message };
+  }
+}
+
+function launchDetached(executable, args, cwd) {
+  return new Promise((resolve, reject) => {
+    let child;
+    try {
+      child = spawn(executable, args, { cwd, detached: true, stdio: 'ignore', windowsHide: false });
+    } catch (error) { reject(error); return; }
+    child.once('error', reject);
+    child.once('spawn', () => { child.unref(); resolve({ ok: true }); });
+  });
+}
+
+ipcMain.handle('shell:terminal-menu-options', () => getTerminalMenuOptions());
+ipcMain.handle('shell:open-terminal', async (_event, request = {}) => {
+  if (process.platform !== 'win32') return { ok: false, error: 'Terminal shortcuts are available only on Windows.' };
+  const kind = request.kind;
+  const directory = typeof request.directory === 'string' ? path.resolve(request.directory) : process.cwd();
+  if (kind !== 'powershell' && kind !== 'wsl') return { ok: false, error: 'Unknown terminal type.' };
+  try {
+    const stats = await fs.stat(directory);
+    if (!stats.isDirectory()) throw new Error('The current panel path is not a directory.');
+    if (kind === 'powershell') {
+      const script = "$process = Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList @('-NoLogo', '-NoProfile', '-NoExit') -WorkingDirectory $env:KOA_KOMMANDER_TERMINAL_DIRECTORY -WindowStyle Normal -PassThru; if (-not $process) { throw 'PowerShell did not start.' }; $process.Id";
+      await runPowerShell(script, { KOA_KOMMANDER_TERMINAL_DIRECTORY: directory });
+      return { ok: true };
+    }
+
+    const distribution = typeof request.distribution === 'string' ? request.distribution.trim() : '';
+    const wsl = await getWslDistributions();
+    if (!distribution || !wsl.names.some((name) => name.toLowerCase() === distribution.toLowerCase())) {
+      throw new Error(wsl.error || 'That WSL distribution is no longer available.');
+    }
+    return await launchDetached('wsl.exe', ['--distribution', distribution, '--cd', directory], directory);
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
 
 /**
  * Creates a key for tracking a folder size scan.

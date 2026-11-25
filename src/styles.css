@@ -1209,6 +1209,50 @@ kbd {
   left: auto;
   right: calc(100% - 2px);
 }
+.terminal-submenu {
+  width: 208px;
+}
+.context-menu .terminal-submenu button {
+  justify-content: flex-start;
+  gap: 9px;
+}
+.terminal-menu-label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
+}
+.terminal-menu-icon,
+.terminal-menu-fallback {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  object-fit: contain;
+}
+.terminal-menu-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #94a3b8;
+  border-radius: 3px;
+  color: #64748b;
+  font: 9px Consolas, monospace;
+}
+.terminal-menu-empty,
+.terminal-menu-loading {
+  display: block;
+  max-width: 190px;
+  padding: 7px 9px;
+  overflow: hidden;
+  color: #64748b;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:root[data-theme="dark"] .terminal-menu-empty,
+:root[data-theme="dark"] .terminal-menu-loading,
+:root[data-theme="dark"] .terminal-menu-fallback {
+  color: #94a3b8;
+}
 
 /* Settings window */
 .settings-backdrop[hidden] {

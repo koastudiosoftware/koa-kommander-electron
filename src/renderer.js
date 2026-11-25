@@ -207,6 +207,7 @@ function restoreDirectoryViewState(directory, panel) {
 
 const summary = document.querySelector("#drive-space-summary");
 const menu = document.querySelector("#context-menu");
+let backgroundMenuRequest = 0;
 const historyMenu = document.querySelector("#history-menu");
 const directorySetMenu = document.querySelector("#directory-set-menu");
 let directorySetMenuSide = null;
@@ -840,6 +841,8 @@ function showContextMenu(x, y, side, entry) {
     .join("");
 
   menu.innerHTML = topRowHtml + mainHtml;
+  menu.dataset.menuKind = "object";
+  backgroundMenuRequest += 1;
   menu.hidden = false;
   updatePasteControls();
   menu.style.left = `${Math.min(x, innerWidth - 230)}px`;
@@ -872,6 +875,7 @@ function showContextMenu(x, y, side, entry) {
 
 function showBackgroundContextMenu(x, y, side) {
   const panel = panels[side];
+  const menuRequest = ++backgroundMenuRequest;
   const option = (label, attributes, selected) =>
     `<button role="menuitemradio" aria-checked="${selected}" ${attributes}>${label}<span class="context-choice-indicator">${selected ? "●" : ""}</span></button>`;
   menu.innerHTML = `
@@ -905,7 +909,17 @@ function showBackgroundContextMenu(x, y, side) {
       <div class="context-submenu" hidden><button role="menuitem" data-background-action="folder">Folder</button><button role="menuitem" data-background-action="shortcut">Shortcut</button></div>
     </div>
     <div class="menu-separator"></div>
-    <button role="menuitem" data-background-action="properties">Properties</button><button role="menuitem" data-background-action="explorer">Open in File Explorer</button>`;
+    <button role="menuitem" data-background-action="properties">Properties</button><button role="menuitem" data-background-action="explorer">Open in File Explorer</button>
+    <div class="menu-separator"></div>
+    <div class="context-menu-item context-submenu-parent">
+      <button role="menuitem" data-submenu-trigger aria-haspopup="true" aria-expanded="false">Open in Terminal<span aria-hidden="true">›</span></button>
+      <div class="context-submenu terminal-submenu" hidden>
+        <button role="menuitem" data-terminal-kind="powershell"><span class="terminal-menu-label"><span class="terminal-menu-fallback" aria-hidden="true">&gt;_</span><span>PowerShell</span></span></button>
+        <div class="menu-separator" data-terminal-separator hidden></div>
+        <div class="terminal-distro-list"><span class="terminal-menu-loading">Detecting WSL distributions…</span></div>
+      </div>
+    </div>`;
+  menu.dataset.menuKind = "background";
   menu.hidden = false;
   updatePasteControls();
   const menuWidth = menu.offsetWidth;
@@ -936,6 +950,54 @@ function showBackgroundContextMenu(x, y, side) {
     document.removeEventListener("mousedown", dismissBackgroundMenu);
   };
   document.addEventListener("mousedown", dismissBackgroundMenu);
+
+  menu.querySelector(".terminal-submenu").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-terminal-kind]");
+    if (!button) return;
+    const request = {
+      kind: button.dataset.terminalKind,
+      distribution: button.dataset.distribution || undefined,
+      directory: panels[side].path,
+    };
+    menu.hidden = true;
+    document.removeEventListener("mousedown", dismissBackgroundMenu);
+    const result = await window.fileManager.openTerminal(request);
+    if (!result?.ok) toast(result?.error || "Could not open the terminal.");
+  });
+  window.fileManager.terminalMenuOptions().then((options) => {
+    if (menu.hidden || menuRequest !== backgroundMenuRequest || menu.dataset.menuKind !== "background") return;
+    const powershellButton = menu.querySelector('[data-terminal-kind="powershell"]');
+    if (powershellButton && options?.powershell?.icon) {
+      powershellButton.querySelector(".terminal-menu-fallback")?.remove();
+      powershellButton.querySelector(".terminal-menu-label").insertAdjacentHTML(
+        "afterbegin",
+        `<img class="terminal-menu-icon" src="${options.powershell.icon}" alt="">`,
+      );
+    }
+    const distroList = menu.querySelector(".terminal-distro-list");
+    const separator = menu.querySelector("[data-terminal-separator]");
+    if (!distroList) return;
+    if (!options?.distributions?.length) {
+      const message = options?.error
+        ? `WSL unavailable: ${options.error}`
+        : "No WSL distributions found";
+      distroList.innerHTML = `<span class="terminal-menu-empty" title="${escapeHtml(message)}">${escapeHtml(message)}</span>`;
+    } else {
+      if (separator) separator.hidden = false;
+      distroList.innerHTML = options.distributions.map(({ name, icon }) => `
+        <button role="menuitem" data-terminal-kind="wsl" data-distribution="${escapeHtml(name)}">
+          <span class="terminal-menu-label">${icon ? `<img class="terminal-menu-icon" src="${icon}" alt="">` : '<span class="terminal-menu-fallback" aria-hidden="true">&gt;_</span>'}<span>${escapeHtml(name)}</span></span>
+        </button>`).join("");
+    }
+    const menuHeight = menu.offsetHeight;
+    menu.style.top = `${Math.max(8, Math.min(Number.parseFloat(menu.style.top) || y, innerHeight - menuHeight - 8))}px`;
+  }).catch((error) => {
+    const distroList = menu.querySelector(".terminal-distro-list");
+    if (distroList && !menu.hidden && menuRequest === backgroundMenuRequest) {
+      const message = `WSL unavailable: ${error.message || error}`;
+      distroList.innerHTML = `<span class="terminal-menu-empty" title="${escapeHtml(message)}">${escapeHtml(message)}</span>`;
+    }
+  });
 
   const applyPanelMenuChange = () => {
     activeSide = side;
