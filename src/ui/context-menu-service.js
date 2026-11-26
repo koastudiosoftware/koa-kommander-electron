@@ -54,9 +54,10 @@ export async function deleteSelection(side) {
   const items = getSelected(side);
   if (!items.length) return;
 
+  const currentPreferences = typeof preferences === "function" ? preferences() : preferences;
   const outcome = await window.fileManager.delete({
     entries: items.map((item) => item.path),
-    confirm: preferences.confirmDelete,
+    confirm: currentPreferences.confirmDelete,
   });
 
   if (outcome.cancelled) return;
