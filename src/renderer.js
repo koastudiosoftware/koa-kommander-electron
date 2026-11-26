@@ -1,4 +1,12 @@
 import { PanelModel } from "./models/PanelModel.js";
+import {
+  defaultKeyboardShortcuts,
+  formatShortcut,
+  keyboardShortcutDefinitions,
+  normalizeKeyboardShortcuts,
+  shortcutFromEvent,
+  shortcutMatches,
+} from "./utils/keyboard-shortcuts.js";
 import { initSearchService } from "./ui/search-service.js";
 import { renderPanel } from "./ui/panel-renderer.js";
 import { initLayoutService, setPanelRatio } from "./ui/layout-service.js";
@@ -22,6 +30,7 @@ import {
   actionIcon,
   escapeHtml,
   formatSize,
+  pathParts,
   setStatus,
   toast,
 } from "./utils/panel-utils.js";
@@ -136,11 +145,13 @@ const defaultPreferences = {
   directorySetSort: "manual",
   directoryViewStates: {},
   thumbnailCachePath: "",
+  keyboardShortcuts: defaultKeyboardShortcuts(),
 };
 let preferences;
 let savedPreferences = loadPreferences({});
 
 preferences = { ...defaultPreferences, ...savedPreferences };
+preferences.keyboardShortcuts = normalizeKeyboardShortcuts(preferences.keyboardShortcuts);
 
 if (typeof preferences.thumbnailCachePath !== "string")
   preferences.thumbnailCachePath = "";
@@ -439,6 +450,7 @@ window.addEventListener("storage", (event) => {
   try {
     savedPreferences = event.newValue ? JSON.parse(event.newValue) : {};
     preferences = { ...defaultPreferences, ...savedPreferences };
+    preferences.keyboardShortcuts = normalizeKeyboardShortcuts(preferences.keyboardShortcuts);
     if (typeof preferences.thumbnailCachePath !== "string")
       preferences.thumbnailCachePath = "";
     if (
@@ -586,6 +598,7 @@ async function navigate(
   { historyMode = "push", historyIndex = -1, suppressToast = false } = {},
 ) {
   const panel = panels[side];
+  const previousPath = panel.path;
   if (panel.path) saveDirectoryViewState(panel.path, panel);
   panel.thumbnailGeneration += 1;
   if (panel.searchId) window.fileManager.cancelSearch(panel.searchId);
@@ -611,13 +624,25 @@ async function navigate(
         });
     }
     if (historyMode === "move") panel.historyIndex = historyIndex;
-    else if (historyMode === "push" && panel.history.at(-1) !== result.path) {
-      panel.history = panel.history.slice(0, panel.historyIndex + 1);
-      panel.history.push(result.path);
-      panel.historyIndex = panel.history.length - 1;
-    } else if (historyMode === "push" && panel.historyIndex < 0) {
-      panel.history = [result.path];
-      panel.historyIndex = 0;
+    else if (historyMode === "push") {
+      if (previousPath === result.path) {
+        const currentHistoryIndex = panel.history[panel.historyIndex] === result.path
+          ? panel.historyIndex
+          : panel.history.lastIndexOf(result.path);
+        if (currentHistoryIndex >= 0) panel.historyIndex = currentHistoryIndex;
+        else {
+          panel.history = [result.path];
+          panel.historyIndex = 0;
+        }
+      } else {
+        const previousHistoryIndex = panel.history[panel.historyIndex] === previousPath
+          ? panel.historyIndex
+          : panel.history.lastIndexOf(previousPath);
+        if (previousHistoryIndex >= 0) panel.historyIndex = previousHistoryIndex;
+        panel.history = panel.history.slice(0, panel.historyIndex + 1);
+        panel.history.push(result.path);
+        panel.historyIndex = panel.history.length - 1;
+      }
     }
     panel.selected.clear();
     renderPanel(side, panels, activeSide, detectedDrives, preferences);
@@ -1245,7 +1270,117 @@ document.addEventListener("click", (event) => {
   }
 });
 
+const keyboardSelectionAnchors = { left: null, right: null };
+const keyboardSelectionHeads = { left: null, right: null };
+
+function selectPanelItem(side, direction, extendSelection) {
+  const panel = panels[side];
+  const panelElement = document.querySelector(`.panel[data-panel="${side}"]`);
+  const parentItem = panelElement?.querySelector('[data-special-entry="up"]:not(.disabled)');
+  const items = [
+    ...(parentItem ? [{ element: parentItem, path: "__UP__" }] : []),
+    ...[...(panelElement?.querySelectorAll("[data-entry]") || [])]
+      .map((element) => ({ element, path: panel.entries[Number(element.dataset.entry)]?.path }))
+      .filter(({ path }) => Boolean(path)),
+  ];
+  if (!items.length) return;
+  let currentIndex = items.findIndex(({ path }) => panel.selected.has(path));
+  if (currentIndex < 0) currentIndex = direction > 0 ? -1 : items.length;
+  let targetIndex = Math.max(0, Math.min(items.length - 1, currentIndex + direction));
+  let target = items[targetIndex];
+  if (!extendSelection) {
+    panel.selected.clear();
+    panel.selected.add(target.path);
+    keyboardSelectionAnchors[side] = target.path;
+    keyboardSelectionHeads[side] = target.path;
+  } else {
+    const selectableItems = items.filter(({ path }) => path !== "__UP__");
+    if (!selectableItems.length) return;
+    const selectedIndices = selectableItems
+      .map(({ path }, index) => panel.selected.has(path) ? index : -1)
+      .filter((index) => index >= 0);
+    if (!selectedIndices.length && panel.selected.has("__UP__") && direction < 0) return;
+    let anchorIndex = selectableItems.findIndex(({ path }) => path === keyboardSelectionAnchors[side]);
+    let headIndex = selectableItems.findIndex(({ path }) => path === keyboardSelectionHeads[side]);
+    if (
+      anchorIndex < 0 ||
+      headIndex < 0 ||
+      !panel.selected.has(keyboardSelectionAnchors[side]) ||
+      !panel.selected.has(keyboardSelectionHeads[side])
+    ) {
+      if (selectedIndices.length) {
+        anchorIndex = selectedIndices[0];
+        headIndex = selectedIndices.at(-1);
+      } else {
+        anchorIndex = direction > 0 ? 0 : selectableItems.length - 1;
+        headIndex = direction > 0 ? -1 : selectableItems.length;
+      }
+      keyboardSelectionAnchors[side] = selectableItems[anchorIndex].path;
+    }
+    targetIndex = Math.max(0, Math.min(selectableItems.length - 1, headIndex + direction));
+    target = selectableItems[targetIndex];
+    keyboardSelectionHeads[side] = selectableItems[targetIndex].path;
+    panel.selected.clear();
+    selectableItems.slice(Math.min(anchorIndex, targetIndex), Math.max(anchorIndex, targetIndex) + 1)
+      .forEach(({ path }) => panel.selected.add(path));
+  }
+  refreshSelection(side);
+  target.element.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+function selectAllPanelItems(side) {
+  const panel = panels[side];
+  const panelElement = document.querySelector(`.panel[data-panel="${side}"]`);
+  const items = [...(panelElement?.querySelectorAll("[data-entry]") || [])]
+    .map((element) => panel.entries[Number(element.dataset.entry)])
+    .filter(Boolean);
+  panel.selected.clear();
+  items.forEach((entry) => panel.selected.add(entry.path));
+  keyboardSelectionAnchors[side] = items[0]?.path || null;
+  keyboardSelectionHeads[side] = items.at(-1)?.path || null;
+  refreshSelection(side);
+}
+
 document.addEventListener("keydown", async (event) => {
+  if (!settingsBackdrop.hidden) {
+    const captureButton = event.target.closest?.("[data-shortcut-capture][data-recording='true']");
+    if (captureButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        captureButton.dataset.recording = "false";
+        captureButton.textContent = formatShortcut(
+          preferences.keyboardShortcuts[captureButton.dataset.shortcutId][Number(captureButton.dataset.shortcutIndex)],
+        );
+        return;
+      }
+      const binding = shortcutFromEvent(event);
+      if (!binding) {
+        captureButton.textContent = "Press a key…";
+        return;
+      }
+      const actionId = captureButton.dataset.shortcutId;
+      const bindingIndex = Number(captureButton.dataset.shortcutIndex);
+      const duplicate = keyboardShortcutDefinitions.some(({ id }) =>
+        (preferences.keyboardShortcuts[id] || []).some((existing, index) =>
+          !(id === actionId && index === bindingIndex) && existing.toLowerCase() === binding.toLowerCase(),
+        ),
+      );
+      if (duplicate) {
+        captureButton.textContent = "Already assigned";
+        setTimeout(() => {
+          if (captureButton.isConnected && captureButton.dataset.recording === "true")
+            captureButton.textContent = "Press a key…";
+        }, 900);
+        return;
+      }
+      preferences.keyboardShortcuts[actionId][bindingIndex] = binding;
+      persistPreferences(preferences);
+      captureButton.dataset.recording = "false";
+      captureButton.textContent = formatShortcut(binding);
+      return;
+    }
+  }
   if (!nameDialogBackdrop.hidden) {
     if (event.key === "Escape") finishNameDialog(null);
     return;
@@ -1270,16 +1405,64 @@ document.addEventListener("keydown", async (event) => {
     closeDirectorySetMenu();
     return;
   }
-  const mod = event.ctrlKey || event.metaKey;
   const target = event.target;
   const isEditingText =
     target instanceof HTMLElement &&
     (target.isContentEditable ||
       ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+
+  if (event.key === "Tab") event.preventDefault();
+  if (isEditingText && event.key !== "Tab") return;
+
+  const shortcutAction = keyboardShortcutDefinitions
+    .filter(({ id }) => id !== "undo")
+    .flatMap(({ id }) => (preferences.keyboardShortcuts[id] || []).map((binding, index) => ({ id, binding, index })))
+    .find(({ binding }) => shortcutMatches(event, binding));
+  if (shortcutAction) {
+    event.preventDefault();
+    const side = activeSide;
+    const panel = panels[side];
+    if (shortcutAction.id === "cut") copySelection(side, true);
+    else if (shortcutAction.id === "copy") copySelection(side, false);
+    else if (shortcutAction.id === "paste") await pasteSelection();
+    else if (shortcutAction.id === "delete") await deleteSelection(side);
+    else if (shortcutAction.id === "switchPanel") {
+      activeSide = side === "left" ? "right" : "left";
+      document.querySelectorAll(".panel").forEach((panelElement) =>
+        panelElement.classList.toggle("is-active", panelElement.dataset.panel === activeSide),
+      );
+      updateSummary();
+      updateToolbarState(panels, activeSide);
+    } else if (shortcutAction.id === "previousHistory") {
+      await moveHistory(side, -1);
+      updateToolbarState(panels, side);
+    } else if (shortcutAction.id === "nextHistory") {
+      await moveHistory(side, 1);
+      updateToolbarState(panels, side);
+    } else if (shortcutAction.id === "parentDirectory") {
+      const parts = pathParts(panel.path);
+      if (parts.length > 1) await navigate(side, parts.at(-2).path);
+    } else if (["previousItem", "nextItem", "selectAdjacent"].includes(shortcutAction.id)) {
+      const direction = shortcutAction.id === "previousItem"
+        ? -1
+        : shortcutAction.id === "nextItem"
+          ? 1
+          : shortcutAction.index === 0 ? -1 : 1;
+      selectPanelItem(side, direction, shortcutAction.id === "selectAdjacent");
+    } else if (shortcutAction.id === "rename") await renameSelection(side);
+    else if (shortcutAction.id === "newFolder") await createFolder(side, side);
+    else if (shortcutAction.id === "refresh") {
+      document.querySelector(`.panel[data-panel="${side}"] [data-action="refresh"]`)?.click();
+    }
+    else if (shortcutAction.id === "selectAll") selectAllPanelItems(side);
+    return;
+  }
+
   if (
-    !mod &&
     !event.altKey &&
-    !isEditingText &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
     /^\p{L}$/u.test(event.key)
   ) {
     const panel = panels[activeSide];
@@ -1305,19 +1488,12 @@ document.addEventListener("keydown", async (event) => {
         match.scrollIntoView({ block: "nearest", inline: "nearest" });
       }
     }
-  } else if (mod && event.key.toLowerCase() === "c") {
-    event.preventDefault();
-    copySelection(activeSide, false);
-  } else if (mod && event.key.toLowerCase() === "x") {
-    event.preventDefault();
-    copySelection(activeSide, true);
-  } else if (mod && event.key.toLowerCase() === "v") {
-    event.preventDefault();
-    await pasteSelection();
-  } else if (event.key === "Delete") {
-    event.preventDefault();
-    await deleteSelection(activeSide);
   } else if (event.key === "Enter") {
+    if (panels[activeSide].selected.has("__UP__")) {
+      const parts = pathParts(panels[activeSide].path);
+      if (parts.length > 1) await navigate(activeSide, parts.at(-2).path);
+      return;
+    }
     const entry = getSelected(activeSide)[0];
     if (entry) {
       const result = await window.fileManager.open(entry.path);
@@ -1530,6 +1706,27 @@ settingsContent.addEventListener("input", (event) => {
 });
 
 settingsContent.addEventListener("click", async (event) => {
+  const shortcutCapture = event.target.closest("[data-shortcut-capture]");
+  if (shortcutCapture) {
+    settingsContent.querySelectorAll("[data-shortcut-capture]").forEach((button) => {
+      button.dataset.recording = "false";
+      if (button !== shortcutCapture) {
+        const actionId = button.dataset.shortcutId;
+        const bindingIndex = Number(button.dataset.shortcutIndex);
+        button.textContent = formatShortcut(preferences.keyboardShortcuts[actionId][bindingIndex]);
+      }
+    });
+    shortcutCapture.dataset.recording = "true";
+    shortcutCapture.textContent = "Press a key…";
+    shortcutCapture.focus();
+    return;
+  }
+  if (event.target.closest("[data-shortcut-reset]")) {
+    preferences.keyboardShortcuts = defaultKeyboardShortcuts();
+    persistPreferences(preferences);
+    renderSettingsCategory();
+    return;
+  }
   if (event.target.closest("[data-cache-browse]")) {
     const input = settingsContent.querySelector("#thumbnail-cache-path");
     try {

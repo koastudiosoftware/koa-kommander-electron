@@ -1,4 +1,9 @@
 import { escapeHtml, getPanelElement } from "../utils/panel-utils.js";
+import {
+  defaultKeyboardShortcuts,
+  formatShortcut,
+  keyboardShortcutDefinitions,
+} from "../utils/keyboard-shortcuts.js";
 
 // Injected state and callbacks
 let preferences, panels, activeSide;
@@ -286,6 +291,14 @@ export function renderSettingsCategory() {
           label.textContent = "Unavailable";
       });
   } else if (settingsCategory === "directory-sets") renderDirectorySets();
+  else if (settingsCategory === "keyboard-shortcuts") {
+    const shortcuts = prefs.keyboardShortcuts || defaultKeyboardShortcuts();
+    const rows = keyboardShortcutDefinitions.map(({ id, label, defaults, note }) => {
+      const bindings = shortcuts[id] || defaults;
+      return `<div class="shortcut-row"><div class="shortcut-description"><strong>${escapeHtml(label)}</strong>${note ? `<small>${escapeHtml(note)}</small>` : ""}</div><div class="shortcut-bindings">${bindings.map((binding, index) => `<button class="shortcut-capture" type="button" data-shortcut-capture data-shortcut-id="${id}" data-shortcut-index="${index}" aria-label="Change ${escapeHtml(label)} shortcut ${index + 1}">${escapeHtml(formatShortcut(binding))}</button>`).join('<span class="shortcut-separator" aria-hidden="true">/</span>')}</div></div>`;
+    }).join("");
+    settingsContent.innerHTML = `<h2>Keyboard Shortcuts</h2><p class="settings-description">Select a shortcut and press the key or key combination you want to use.</p><div class="shortcut-list">${rows}</div><button class="settings-secondary shortcut-reset" data-shortcut-reset>Reset to defaults</button>`;
+  }
 }
 
 /**

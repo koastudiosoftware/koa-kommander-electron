@@ -1385,6 +1385,61 @@ kbd {
   font-size: 11px;
   line-height: 1.5;
 }
+.shortcut-list {
+  display: grid;
+  gap: 0;
+  margin-bottom: 18px;
+}
+.shortcut-row {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.shortcut-description strong,
+.shortcut-description small {
+  display: block;
+}
+.shortcut-description strong {
+  font-size: 12px;
+  font-weight: 550;
+}
+.shortcut-description small {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 10px;
+}
+.shortcut-bindings {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.settings-content .shortcut-capture {
+  min-width: 76px;
+  height: 29px;
+  padding: 0 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+  color: #334155;
+  font: 11px "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+.settings-content .shortcut-capture:hover,
+.settings-content .shortcut-capture[data-recording="true"] {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.shortcut-separator {
+  color: #64748b;
+  font-size: 11px;
+}
+.shortcut-reset {
+  margin-top: 4px;
+}
 .setting-option {
   min-height: 62px;
   display: flex;
@@ -2776,6 +2831,23 @@ kbd {
 :root[data-theme="dark"] .settings-hint {
   color: #94a3b8;
 }
+:root[data-theme="dark"] .shortcut-row {
+  border-color: #334155;
+}
+:root[data-theme="dark"] .shortcut-description small {
+  color: #94a3b8;
+}
+:root[data-theme="dark"] .settings-content .shortcut-capture {
+  background: #0f172a;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+:root[data-theme="dark"] .settings-content .shortcut-capture:hover,
+:root[data-theme="dark"] .settings-content .shortcut-capture[data-recording="true"] {
+  background: #1e3a8a66;
+  border-color: #3b82f6;
+  color: #93c5fd;
+}
 
 :root[data-theme="dark"] .column-sort:hover {
   color: #f3f4f5;
@@ -3065,6 +3137,23 @@ kbd {
   :root[data-theme="system"] .settings-category.active {
     background: #1e3a8a66;
     color: #60a5fa;
+  }
+  :root[data-theme="system"] .shortcut-row {
+    border-color: #334155;
+  }
+  :root[data-theme="system"] .shortcut-description small {
+    color: #94a3b8;
+  }
+  :root[data-theme="system"] .settings-content .shortcut-capture {
+    background: #0f172a;
+    border-color: #475569;
+    color: #e2e8f0;
+  }
+  :root[data-theme="system"] .settings-content .shortcut-capture:hover,
+  :root[data-theme="system"] .settings-content .shortcut-capture[data-recording="true"] {
+    background: #1e3a8a66;
+    border-color: #3b82f6;
+    color: #93c5fd;
   }
   :root[data-theme="system"] .directory-set-group h3,
   :root[data-theme="system"] .directory-set-menu-group-title {

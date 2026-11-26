@@ -182,7 +182,7 @@ export function moveHistory(side, offset) {
   const panel = panels[side];
   const targetIndex = panel.historyIndex + offset;
   if (targetIndex < 0 || targetIndex >= panel.history.length) return;
-  moveHistoryTo(side, targetIndex);
+  return moveHistoryTo(side, targetIndex);
 }
 
 /**
